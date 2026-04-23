@@ -27,4 +27,5 @@ node_modules
 .env.local
 .vscode/
 /tmp/
+contraseña_supabase.txt
 
