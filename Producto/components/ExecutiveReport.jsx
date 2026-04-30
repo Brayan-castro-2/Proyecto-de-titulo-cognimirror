@@ -224,6 +224,25 @@ export default function ExecutiveReport({ record, onRestart, onExit }) {
     pdf.save(`CogniMirror_Diagnostic_${record?.playerName || 'User'}_${new Date().toLocaleDateString()}.pdf`);
   };
 
+  const dualChartData = useMemo(() => {
+    if (!record) return [];
+    const raw = record.rawTurnsData || [];
+    const validGo = raw.filter(t => t.type === 'GO' && t.time > 0);
+    const leftGo = validGo.filter(t => t.expected === 'L');
+    const rightGo = validGo.filter(t => t.expected === 'R');
+    
+    const maxLen = Math.max(leftGo.length, rightGo.length);
+    const data = [];
+    for (let i = 0; i < maxLen; i++) {
+      data.push({
+        index: i + 1,
+        left: leftGo[i] ? leftGo[i].time : null,
+        right: rightGo[i] ? rightGo[i].time : null
+      });
+    }
+    return data;
+  }, [record]);
+
   if (!record) return null;
 
   return (
@@ -286,15 +305,20 @@ export default function ExecutiveReport({ record, onRestart, onExit }) {
 
           {/* GRÁFICO DE LÍNEAS (Recuperado) */}
           <div className="h-72 w-full bg-white/5 rounded-3xl p-6 border border-white/10 backdrop-blur-md relative">
-            <h4 className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em] mb-6">Flujo de Reacción Dual</h4>
+            <h4 className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em] mb-6">Flujo de Reacción Dual (I vs D)</h4>
             <div className="h-48 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={metrics.turns}>
+                <LineChart data={dualChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
                   <XAxis dataKey="index" hide />
                   <YAxis domain={[0, 1500]} hide />
-                  <Tooltip contentStyle={{backgroundColor: '#000', border: 'none', borderRadius: '12px', fontSize: '10px'}} />
-                  <Line type="monotone" dataKey="time" stroke="#00FFFF" strokeWidth={4} dot={{fill: '#00FFFF', r: 4}} activeDot={{r: 6, stroke: '#00FFFF', strokeWidth: 2}} />
+                  <Tooltip 
+                    contentStyle={{backgroundColor: '#000', border: 'none', borderRadius: '12px', fontSize: '10px'}} 
+                    itemStyle={{fontWeight: 'bold'}}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
+                  <Line name="Izquierda (Rojo)" type="monotone" dataKey="left" stroke="#ef4444" strokeWidth={4} dot={{fill: '#ef4444', r: 4}} activeDot={{r: 6, stroke: '#ef4444', strokeWidth: 2}} connectNulls />
+                  <Line name="Derecha (Naranja)" type="monotone" dataKey="right" stroke="#f97316" strokeWidth={4} dot={{fill: '#f97316', r: 4}} activeDot={{r: 6, stroke: '#f97316', strokeWidth: 2}} connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </div>

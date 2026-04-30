@@ -298,7 +298,7 @@ export default function ClassicDashboard() {
               <button className="cube-btn" onClick={calibrateGyro}>⚓ Calibrar</button>
 
               {/* ── Botón Joicube ── */}
-              <div style={{ position: 'relative', display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'none', position: 'relative', gap: '8px', alignItems: 'center' }}>
                 <button
                   className={`joicube-btn ${joicube.status === 'no_server' ? 'error' : joicube.status}`}
                   onClick={joicube.toggle}
