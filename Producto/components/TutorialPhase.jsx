@@ -16,14 +16,14 @@ const PHASES = {
     type: 'mirror',
     face: 'R',               // R = Right = Naranja en el cubo estándar
     expectedBLE: ['R'],       // El sensor envía 'R' al girar la cara derecha
-    demoMoves: ['R'],         // Demo: gira R 90° fluido
+    demoMoves: ['R', "R'"],   // Demo: gira R y lo devuelve para no alterar el estado real
     label: 'DERECHA (Naranja)',
   },
   3: {
     type: 'mirror',
     face: 'L',               // L = Left = Rojo en el cubo estándar
     expectedBLE: ['L'],       // El sensor envía 'L' al girar la cara izquierda
-    demoMoves: ['L'],         // Demo: gira L 90° fluido
+    demoMoves: ['L', "L'"],   // Demo: gira L y lo devuelve
     label: 'IZQUIERDA (Rojo)',
   },
   4: { text: 'Si ves VERDE o AZUL, 🛑 NO MUEVAS NADA', type: 'info', duration: 2500 },
@@ -48,6 +48,7 @@ export default function TutorialPhase({ onCompleteTutorial }) {
   const faseRef = useRef(fase);
   const subFaseRef = useRef(subFase);
   const ignoreInputRef = useRef(false);
+  const moveHistory = useRef([]);
 
   // Mantener refs sincronizados con state
   useEffect(() => { faseRef.current = fase; }, [fase]);
@@ -64,7 +65,7 @@ export default function TutorialPhase({ onCompleteTutorial }) {
       setSubFase(null);
       setIsAnimatingDemo(false);
       ignoreInputRef.current = false;
-    }, 500); // REFINADO: Transición acelerada a 500ms
+    }, 200); // REFINADO: Transición ultra acelerada
   }, []);
 
   // ═══════════════════════════════════════════
@@ -78,13 +79,13 @@ export default function TutorialPhase({ onCompleteTutorial }) {
        ignoreInputRef.current = true;
        const infoTimer = setTimeout(() => {
           advanceWithFlash(fase + 1);
-       }, p.duration || 2000);
+       }, p.duration || 1000);
        return () => clearTimeout(infoTimer);
     }
 
     if (p.type !== 'mirror') return;
 
-    ignoreInputRef.current = true;
+    ignoreInputRef.current = false; // PERMITIR RESPUESTA INMEDIATA (Fast-track)
     let actionTimer;
 
     console.log(`[MAESTRO] Fase ${fase}: Entrando, esperando centrado...`);
@@ -97,16 +98,16 @@ export default function TutorialPhase({ onCompleteTutorial }) {
       setCurrentDemoMoves([...p.demoMoves]);
       setDemoKey(k => k + 1);
 
-      // PASO B: ACCIÓN (después de 1.8s desde que empieza la demo para hacerlo fast-track)
+      // PASO B: ACCIÓN
       actionTimer = setTimeout(() => {
         console.log(`[MAESTRO] Fase ${fase}: ACCIÓN → esperando BLE: ${p.expectedBLE.join(',')}`);
         setSubFase('action');
         setIsAnimatingDemo(false);
         setCurrentDemoMoves(null);
         ignoreInputRef.current = false;
-      }, 1800);
+      }, 1000);
 
-    }, 800); // 0.8s delay para acelerar el tutorial
+    }, 200); // Reducido delay inicial
 
     return () => {
       clearTimeout(startTimer);
@@ -123,6 +124,10 @@ export default function TutorialPhase({ onCompleteTutorial }) {
   // ═══════════════════════════════════════════
   useEffect(() => {
     const unsub = subscribeToMoves((move) => {
+      const now = Date.now();
+      moveHistory.current.push({ m: move, t: now });
+      moveHistory.current = moveHistory.current.filter(x => now - x.t < 3500);
+
       // Leer valores ACTUALES desde refs, no desde el closure
       const currentFase = faseRef.current;
       const currentSub = subFaseRef.current;
@@ -133,7 +138,30 @@ export default function TutorialPhase({ onCompleteTutorial }) {
 
       if (ignoreInputRef.current) return;
 
-      if (p?.type === 'mirror' && currentSub === 'action') {
+      const lTotal = moveHistory.current.filter(x => x.m === 'L' || x.m === "L'").length;
+      const isL2 = move === 'L2' || move === "L2'" || lTotal >= 2;
+
+      // ── SALTO RÁPIDO GLOBAL CON L2 ──
+      if (isL2) {
+        moveHistory.current = []; // Limpiar para no gatillar 2 veces
+        if (currentFase === 1) {
+          // Confirmar posición manualmente
+          setIsAligned(true);
+          setTimeout(() => {
+            setStage('centered');
+            setIsAligned(false);
+            advanceWithFlash(2);
+          }, 150);
+        } else if (currentFase >= 5) {
+          onCompleteTutorial();
+        } else {
+          // Fase 2, 3 o 4: Saltar a la siguiente
+          advanceWithFlash(currentFase + 1);
+        }
+        return;
+      }
+
+      if (p?.type === 'mirror' && (currentSub === 'action' || currentSub === 'demo')) {
         const isCorrect = p.expectedBLE.includes(letter);
         console.log(`[BLE CHECK] got="${letter}" want="${p.expectedBLE}" → ${isCorrect ? '✅ MATCH' : '❌ NO MATCH'}`);
 
@@ -143,12 +171,12 @@ export default function TutorialPhase({ onCompleteTutorial }) {
           setTimeout(() => {
             setIsAligned(false);
             advanceWithFlash(currentFase + 1);
-          }, 400); // Acelerado éxito
+          }, 150); // Acelerado éxito
         }
       }
     });
     return () => unsub();
-  }, [subscribeToMoves, advanceWithFlash]);
+  }, [subscribeToMoves, advanceWithFlash, onCompleteTutorial]);
 
   // ═══════════════════════════════════════════
   //  CONFIRMACIÓN MANUAL (FASE 1)
@@ -161,7 +189,7 @@ export default function TutorialPhase({ onCompleteTutorial }) {
       setIsAligned(false);
       setAutoProgressing(false);
       advanceWithFlash(2);
-    }, 600); // Acelerado confirm
+    }, 150); // Acelerado confirm
   };
 
   // Texto dinámico
@@ -180,7 +208,7 @@ export default function TutorialPhase({ onCompleteTutorial }) {
   //  RENDER (Zero-scroll HUD)
   // ═══════════════════════════════════════════
   return (
-    <div className="h-screen max-h-screen overflow-hidden flex flex-col justify-between items-center bg-[#08090c] text-white relative py-8">
+    <div className="h-full min-h-[calc(100vh-20px)] max-h-screen overflow-hidden flex flex-col justify-between items-center bg-[#08090c] text-white relative py-2 sm:py-4">
 
       <div className="absolute inset-0 pointer-events-none">
         <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full blur-[140px] transition-colors duration-700 opacity-15 ${
@@ -189,17 +217,29 @@ export default function TutorialPhase({ onCompleteTutorial }) {
       </div>
 
       {/* Header */}
-      <div className="z-10 text-center shrink-0">
+      <div className="z-10 text-center shrink-0 w-full relative px-4">
         <h1 className="text-xl font-black tracking-widest uppercase text-white/85">Calibración Inteligente</h1>
-        <div className="flex items-center justify-center gap-2 mt-0.5">
+        <div className="flex items-center justify-center gap-2 mt-0.5 mb-2">
           <div className="h-px w-8 bg-blue-600" />
           <span className="text-[8px] font-black text-blue-500 uppercase tracking-[0.4em]">CogniMirror Engine</span>
           <div className="h-px w-8 bg-blue-600" />
         </div>
+        <div className="inline-flex items-center gap-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(244,63,94,0.1)]">
+          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+          TIP: Para continuar en cualquier momento, gira 2 veces ROJO (L2)
+        </div>
+        {fase < 5 && (
+          <button 
+            onClick={onCompleteTutorial}
+            className="absolute right-4 top-0 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-[10px] font-bold text-white/50 hover:text-white uppercase tracking-wider transition-colors z-50 border border-white/10"
+          >
+            Saltar
+          </button>
+        )}
       </div>
 
       {/* Viewport (ARRIBA) */}
-      <div className="z-20 w-full max-w-5xl flex items-center justify-center gap-6 px-4 shrink-0 my-4">
+      <div className="z-20 w-full max-w-5xl flex items-center justify-center gap-4 px-4 shrink-0 my-2">
 
         <motion.div
           animate={{ flex: stage === 'centered' ? 1 : 0.5 }}
@@ -219,14 +259,24 @@ export default function TutorialPhase({ onCompleteTutorial }) {
             'border-white/5 bg-white/[0.02]'
           }`}>
             <Cube3DViewer
-              size={stage === 'centered' ? 340 : 300}
+              size={stage === 'centered' ? 280 : 220}
               status="gyro_active"
               targetRotation={globalRotation}
               ignoreSensor={isAnimatingDemo}
-              demoMoves={currentDemoMoves}
+              demoMoves={subFase === 'demo' ? currentDemoMoves : null}
               demoKey={demoKey}
               onDemoComplete={handleDemoComplete}
             />
+            {PHASES[fase]?.type === 'mirror' && PHASES[fase]?.face === 'R' && (
+              <div className="absolute -right-8 sm:-right-16 top-1/2 -translate-y-1/2 text-orange-500 animate-bounce drop-shadow-[0_0_12px_rgba(249,115,22,0.8)] z-50">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 12h14"/></svg>
+              </div>
+            )}
+            {PHASES[fase]?.type === 'mirror' && PHASES[fase]?.face === 'L' && (
+              <div className="absolute -left-8 sm:-left-16 top-1/2 -translate-y-1/2 text-red-500 animate-bounce drop-shadow-[0_0_12px_rgba(239,68,68,0.8)] z-50">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M19 12H5"/></svg>
+              </div>
+            )}
             <AnimatePresence>
               {isAligned && (
                 <motion.div
@@ -280,7 +330,7 @@ export default function TutorialPhase({ onCompleteTutorial }) {
                     <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full shadow-[0_0_6px_#eab308]" />
                   </div>
                 </div>
-                <Cube3DViewer size={300} isLocked={true} />
+                <Cube3DViewer size={220} isLocked={true} />
               </div>
               <p className="text-[8px] text-white/20 font-medium tracking-wide text-center max-w-[300px] leading-relaxed shrink-0">
                 Referencia visual. Tu cubo físico debe verse así.
@@ -291,7 +341,7 @@ export default function TutorialPhase({ onCompleteTutorial }) {
       </div>
 
       {/* Instrucción Flotante (ABAJO) */}
-      <div className={`z-30 w-full max-w-lg mx-4 px-6 py-4 rounded-2xl backdrop-blur-md flex flex-col items-center text-center gap-3 shrink-0 border transition-all duration-300 ${
+      <div className={`z-30 w-full max-w-lg mx-4 px-4 py-3 mb-8 rounded-2xl backdrop-blur-md flex flex-col items-center text-center gap-2 shrink-0 border transition-all duration-300 ${
         flashSuccess
           ? 'bg-green-500/10 border-green-500/30 shadow-[0_0_30px_rgba(34,197,94,0.15)]'
           : 'bg-white/[0.02] border-white/10 shadow-lg'
@@ -324,12 +374,17 @@ export default function TutorialPhase({ onCompleteTutorial }) {
               ¡En posición!
             </button>
           ) : fase >= 5 ? (
-            <button
-              onClick={onCompleteTutorial}
-              className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-sm uppercase tracking-wider rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)] group whitespace-nowrap w-full sm:w-auto"
-            >
-              Iniciar Test <span className="inline-block group-hover:translate-x-1 transition-transform ml-1">→</span>
-            </button>
+            <div className="flex flex-col items-center gap-3">
+              <span className="text-[10px] text-red-400 font-black uppercase tracking-widest bg-red-500/10 px-4 py-1.5 rounded-full border border-red-500/20">
+                L2: Giro Doble Rojo para confirmar
+              </span>
+              <button
+                onClick={onCompleteTutorial}
+                className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-sm uppercase tracking-wider rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)] group whitespace-nowrap w-full sm:w-auto"
+              >
+                Iniciar Test <span className="inline-block group-hover:translate-x-1 transition-transform ml-1">→</span>
+              </button>
+            </div>
           ) : (
             <div className="flex flex-col items-center gap-1 opacity-50">
               <div className="flex items-center gap-1.5">

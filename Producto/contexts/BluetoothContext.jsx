@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
+import BluetoothScanner from '../components/BluetoothScanner';
 
 const SERVICE_UUID    = '12345678-1234-5678-1234-56789abcdef0';
 // const CHAR_LED_UUID   = '12345678-1234-5678-1234-56789abcdef1';
@@ -14,6 +15,7 @@ export function BluetoothProvider({ children }) {
   const [isConnected, setIsConnected] = useState(false);
   const [batteryLevel, setBatteryLevel] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [latencyOffset, setLatencyOffset] = useState(0);
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [calibrationResult, setCalibrationResult] = useState(null); // { ble, render, total }
@@ -153,25 +155,12 @@ export function BluetoothProvider({ children }) {
     if (lastPacketFingerprint.current === fingerprint) return;
     lastPacketFingerprint.current = fingerprint;
 
-    const faceTable = ["B", "B'", "F", "F'", "U", "U'", "D", "D'", "L", "L'", "R", "R'"];
+    const faceTable = ["F", "F'", "B", "B'", "U", "U'", "D", "D'", "L", "L'", "R", "R'"];
     
     if (moveId >= 0 && moveId < faceTable.length) {
       const finalMove = faceTable[moveId];
 
-      // 2. Anti-Rebote Físico y Filtro de Giros de 180 grados (U2, R2)
-      // Si el usuario hace un giro físico de 180° en un solo impulso de muñeca, 
-      // el sensor enviará 2 paquetes válidos e idénticos. En juegos rítmicos y UI, 
-      // esto se percibe como un salto doble no deseado. Ignoramos GIROS IDÉNTICOS en <250ms.
       const now = performance.now();
-      if (
-        lastPacketTimeRef.current && 
-        now - lastPacketTimeRef.current < 250 && 
-        window.lastFaceCache === finalMove // usamos el objeto window para guardar el estado del último movimiento rapido
-      ) {
-         console.warn(`[BLE] Ignorando doble pulsación física (overshoot) en ${finalMove}`);
-         return; 
-      }
-      
       window.lastFaceCache = finalMove;
       lastPacketTimeRef.current = now;
 
@@ -219,69 +208,66 @@ export function BluetoothProvider({ children }) {
     console.log("Cubo desconectado.");
   }, []);
 
-  const connectBLE = async () => {
+  // ── Abre el modal de escaneo (reemplaza al viejo connectBLE) ──
+  const openScanner = () => setScannerOpen(true);
+
+  // Alias legacy para compatibilidad con componentes que llaman connectBLE
+  const connectBLE = () => {
     if (isConnected) return;
-    setIsConnecting(true);
-
-    try {
-      const bleDevice = await navigator.bluetooth.requestDevice({
-        filters: [
-          { namePrefix: 'CogniMirror' },
-          { namePrefix: 'Rubiks' },
-          { namePrefix: 'GoCube' }
-        ],
-        optionalServices: [
-          SERVICE_UUID,
-          '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
-          '0000180f-0000-1000-8000-00805f9b34fb'  // Battery Service
-        ]
-      });
-
-      const bleServer = await bleDevice.gatt.connect();
-      serverRef.current = bleServer;
-
-      // Dependiendo de la marca del cubo abrimos los servicios
-      if (bleDevice.name.includes('CogniMirror')) {
-        const svc = await bleServer.getPrimaryService(SERVICE_UUID);
-        const gyroChar = await svc.getCharacteristic(CHAR_GYRO_UUID);
-        await gyroChar.startNotifications();
-        gyroChar.addEventListener('characteristicvaluechanged', handleGyroData);
-      } else {
-        // Rubik's Connected / GoCube
-        const svc = await bleServer.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
-        const notifyChar = await svc.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
-        await notifyChar.startNotifications();
-        notifyChar.addEventListener('characteristicvaluechanged', handleRubiksData);
-      }
-
-      // Servicio estándar de batería
-      try {
-        const batSvc = await bleServer.getPrimaryService('0000180f-0000-1000-8000-00805f9b34fb');
-        const batChar = await batSvc.getCharacteristic('00002a19-0000-1000-8000-00805f9b34fb');
-        const updateBatteryLevel = async () => {
-          try {
-            const v = await batChar.readValue();
-            setBatteryLevel(v.getUint8(0));
-          } catch(e){}
-        };
-        await updateBatteryLevel();
-        if (batIntervalRef.current) clearInterval(batIntervalRef.current);
-        batIntervalRef.current = setInterval(updateBatteryLevel, 30000);
-      } catch(e) {
-        // El cubo no soporta polling de batería (ignorar)
-      }
-
-      bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-      
-      setDevice(bleDevice.name);
-      setIsConnected(true);
-
-    } catch (e) {
-      console.warn("Error en conexión BLE:", e);
-    } finally {
-      setIsConnecting(false);
-    }
+    setScannerOpen(true);
   };
+
+  // Callback que recibe el resultado exitoso del BluetoothScanner modal
+  const handleScannerConnected = useCallback(({ server, device: bleDevice, type }) => {
+    serverRef.current = server;
+
+    // Registrar listener de movimientos según tipo
+    if (type === 'cognimirror') {
+      // El listener de gyro ya fue registrado por el Scanner;
+      // aquí sólo ponemos el event relay al contexto:
+      server.device.addEventListener('gattserverdisconnected', onDisconnected);
+    } else {
+      server.device.addEventListener('gattserverdisconnected', onDisconnected);
+    }
+
+    // Actualizar batería periódicamente
+    const tryBattery = async () => {
+      try {
+        const batSvc  = await server.getPrimaryService('0000180f-0000-1000-8000-00805f9b34fb');
+        const batChar = await batSvc.getCharacteristic('00002a19-0000-1000-8000-00805f9b34fb');
+        const read = async () => { try { const v = await batChar.readValue(); setBatteryLevel(v.getUint8(0)); } catch(_){} };
+        await read();
+        if (batIntervalRef.current) clearInterval(batIntervalRef.current);
+        batIntervalRef.current = setInterval(read, 30000);
+      } catch(_) {}
+    };
+    tryBattery();
+
+    // Suscribir movimientos (Rubiks/GoCube) desde el evento nativo
+    if (type === 'rubiks') {
+      // El scanner ya registró el listener; re-registramos broadcastMove aquí
+      const onMove = (event) => handleRubiksData(event);
+      try {
+        server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e')
+          .then(svc => svc.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e'))
+          .then(char => char.addEventListener('characteristicvaluechanged', onMove))
+          .catch(() => {});
+      } catch(_) {}
+    } else if (type === 'cognimirror') {
+      const onGyro = (event) => handleGyroData(event);
+      try {
+        server.getPrimaryService(SERVICE_UUID)
+          .then(svc => svc.getCharacteristic(CHAR_GYRO_UUID))
+          .then(char => char.addEventListener('characteristicvaluechanged', onGyro))
+          .catch(() => {});
+      } catch(_) {}
+    }
+
+    setDevice(bleDevice.name);
+    setIsConnected(true);
+    setScannerOpen(false);
+  }, [onDisconnected, handleGyroData, handleRubiksData]);
+
 
   const disconnectBLE = () => {
     if (serverRef.current) {
@@ -330,7 +316,8 @@ export function BluetoothProvider({ children }) {
   }, []);
 
   const value = {
-    connectBLE,
+    connectBLE,   // alias legacy → abre el scanner
+    openScanner,  // nueva API preferida
     disconnectBLE,
     isConnected,
     isConnecting,
@@ -356,6 +343,11 @@ export function BluetoothProvider({ children }) {
   return (
     <BluetoothContext.Provider value={value}>
       {children}
+      <BluetoothScanner
+        isOpen={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onConnected={handleScannerConnected}
+      />
     </BluetoothContext.Provider>
   );
 }

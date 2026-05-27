@@ -36,11 +36,13 @@ const COMPOUND_MOVES = {
 export default function Cube3DViewer({
   targetRotation, status, className,
   isLocked = false, size = 300, ignoreSensor = false,
-  demoMoves = null, demoKey = 0, onDemoComplete = null
+  demoMoves = null, demoKey = 0, onDemoComplete = null,
+  highlightFace = null
 }) {
   const containerRef = useRef(null);
   const threeRef = useRef(null);
   const { moveHistory } = useCubeState();
+  const highlightFaceRef = useRef(highlightFace);
   
   // Sincronización Refs
   const movesAppliedRef = useRef(0);
@@ -205,7 +207,7 @@ export default function Cube3DViewer({
       }
     };
 
-    threeRef.current = { cubeGroup, rotateFace };
+    threeRef.current = { cubeGroup, rotateFace, allCubies };
 
     // ═══ ANIMATION LOOP ═══
     let afId;
@@ -221,16 +223,18 @@ export default function Cube3DViewer({
       }
 
       if (isLocked) {
-        const t = Date.now() * 0.0005;
-        cubeGroup.rotation.y = t;
-        cubeGroup.rotation.x = Math.sin(t * 0.7) * 0.3;
+        // Balanceo suave alrededor de la orientación estándar (±15° en Y, ±5° en X).
+        // El cubo nunca gira más de 15°, así cada cara siempre queda en su lado correcto.
+        const t = Date.now() * 0.0008;
+        cubeGroup.rotation.y = Math.sin(t) * 0.26;          // ±15°
+        cubeGroup.rotation.x = Math.sin(t * 0.6 + 1) * 0.09; // ±5°
         renderer.render(scene, camera);
         return;
       }
 
       const now = Date.now();
       const isIdle = (now - lastInteractionRef.current > 3000) && !isDraggingRef.current;
-      if (isIdle) {
+      if (!isDraggingRef.current && isIdle) {
         camera.position.lerp(new THREE.Vector3(4, 4, 8), 0.05);
         camera.lookAt(0, 0, 0);
       }
@@ -281,17 +285,59 @@ export default function Cube3DViewer({
     }
   }, [moveHistory, isLocked, ignoreSensor]);
 
+  // ═══ HIGHLIGHT FACE (SIMON SAYS) ═══
+  useEffect(() => {
+    highlightFaceRef.current = highlightFace;
+    if (!threeRef.current) return;
+    const { allCubies } = threeRef.current;
+    if (!allCubies) return;
+
+    allCubies.forEach(cubie => {
+      if (Array.isArray(cubie.material)) {
+        cubie.material.forEach((mat, idx) => {
+          if (highlightFace) {
+             const mapIdx = { 'R': 0, 'L': 1, 'U': 2, 'D': 3, 'F': 4, 'B': 5 };
+             if (idx === mapIdx[highlightFace] && mat.color.getHex() !== COLORS.CORE) {
+               // Cara iluminada
+               mat.emissive.setHex(mat.color.getHex());
+               mat.emissiveIntensity = 2.0; // Alto brillo
+               mat.opacity = 1.0;
+               mat.transparent = false;
+             } else if (mat.color.getHex() !== COLORS.CORE) {
+               // Caras apagadas para crear alto contraste
+               mat.emissive.setHex(0x000000);
+               mat.opacity = 0.15; // Muy tenue
+               mat.transparent = true;
+             }
+          } else {
+             // Reset al estado normal
+             mat.emissive.setHex(0x000000);
+             mat.opacity = 1.0;
+             mat.transparent = false;
+          }
+          // FUNDAMENTAL: Forzar recompilación del material al cambiar opacidad/transparencia
+          mat.needsUpdate = true;
+        });
+      }
+    });
+  }, [highlightFace]);
+
   // ═══ DEMO SEQUENCES ═══
+  const isDemoRunningRef = useRef(false);
   useEffect(() => {
     if (!demoMoves || demoMoves.length === 0 || demoKey === 0) return;
     const three = threeRef.current;
     if (!three) return;
 
     const runDemo = async () => {
+      if (isDemoRunningRef.current) return;
+      isDemoRunningRef.current = true;
       for (const m of demoMoves) {
         await three.rotateFace(m, 12);
-        await new Promise(r => setTimeout(r, 200));
+        // Pequeña pausa entre movimientos de la demo
+        await new Promise(r => setTimeout(r, 150));
       }
+      isDemoRunningRef.current = false;
       if (onDemoComplete) onDemoComplete();
     };
     runDemo();

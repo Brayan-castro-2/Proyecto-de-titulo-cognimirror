@@ -77,7 +77,7 @@ function generateDeck() {
   });
 }
 
-export default function ReactionGame({ onExit, playerName, sessionMeta, sessionStartTime }) {
+export default function ReactionGame({ onExit, activePatientId, addSession, getPatient, sessionMeta, sessionStartTime }) {
   const { subscribeToMoves } = useBluetoothCube();
   const { cubeRotation: globalRotation } = useCubeState();
   const { deactivate: deactivateJoicube } = useJoicube();
@@ -91,7 +91,7 @@ export default function ReactionGame({ onExit, playerName, sessionMeta, sessionS
   // Mazo estático y generado para las 15 rondas
   const deck = useMemo(() => generateDeck(), []);
 
-  const [stage, setStage] = useState('rules'); // rules | waiting | stimulus | finished
+  const [stage, setStage] = useState('waiting'); // waiting | stimulus | finished
   const [round, setRound] = useState(0); 
   const [flash, setFlash] = useState(null); // 'red', 'green', 'black', 'grey'
   const [shake, setShake] = useState(0);
@@ -105,9 +105,8 @@ export default function ReactionGame({ onExit, playerName, sessionMeta, sessionS
   const timerRef = useRef(0);
   const nogoTimeoutRef = useRef(null);
   const goTimeoutRef = useRef(null);
-  const stageRef = useRef('rules');
+  const stageRef = useRef('waiting');
   const targetRef = useRef(null);
-  const moveHistoryRef = useRef([]);
 
   // Curva de Dificultad
   const baseDelayRef = useRef(1500); // 1.5s inicial
@@ -214,9 +213,9 @@ export default function ReactionGame({ onExit, playerName, sessionMeta, sessionS
     
     const nogoFails = results.filter(r => r.type === 'NOGO' && r.fail).length;
 
-    const record = {
+    const sessionData = {
       id: crypto.randomUUID(),
-      playerName: playerName || 'Anónimo',
+      testType: 'reaction',
       date: new Date().toISOString(),
       sessionMeta,
       metrics: { 
@@ -235,42 +234,14 @@ export default function ReactionGame({ onExit, playerName, sessionMeta, sessionS
       rawTurnsData: results
     };
 
-    const oldDb = JSON.parse(localStorage.getItem('cogniMirror_DB') || '[]');
-    oldDb.push(record);
-    localStorage.setItem('cogniMirror_DB', JSON.stringify(oldDb));
+    const savedSession = addSession(activePatientId, sessionData);
+    const patientObj = getPatient(activePatientId);
 
-    // NUEVO SISTEMA (Storage por Usuario)
-    const pName = playerName || 'Anónimo';
-    const usersDB = JSON.parse(localStorage.getItem('cogniMirror_Users') || '{}');
-    if (!usersDB[pName]) {
-      usersDB[pName] = { playerName: pName, history: [] };
-    }
-    usersDB[pName].history.push(record);
-    localStorage.setItem('cogniMirror_Users', JSON.stringify(usersDB));
-
-    if (onExit) onExit(record, usersDB[pName].history);
+    if (onExit) onExit(savedSession, patientObj);
   };
 
   // ── BLUETOOTH LISTENER ──
   const handleMove = useCallback((movimiento) => {
-
-    if (stageRef.current === 'rules') {
-      const now = Date.now();
-      moveHistoryRef.current.push({ m: movimiento, t: now });
-      moveHistoryRef.current = moveHistoryRef.current.filter(x => now - x.t < 1200);
-
-      const lMoves = moveHistoryRef.current.filter(x => x.m === 'L').length;
-      const lPrimeMoves = moveHistoryRef.current.filter(x => x.m === "L'").length;
-      const isL2 = movimiento === 'L2' || lMoves >= 2 || lPrimeMoves >= 2;
-
-      if (isL2) {
-        setStage('waiting');
-        stageRef.current = 'waiting';
-        moveHistoryRef.current = []; // flush
-        gameStartTimeRef.current = performance.now();
-      }
-      return;
-    }
 
     if (stageRef.current !== 'stimulus') return;
 
@@ -393,51 +364,6 @@ export default function ReactionGame({ onExit, playerName, sessionMeta, sessionS
   return (
     <div className={`relative w-full h-screen overflow-hidden flex items-center justify-center transition-colors duration-[0.1s] ${bgColorClass}`}>
       
-      {/* ── FASE: REGLAS ── */}
-      <AnimatePresence>
-        {stage === 'rules' && (
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }}
-            className="z-50 absolute inset-0 bg-[#07080f] flex flex-col items-center justify-center p-6"
-          >
-            <h1 className="text-3xl md:text-5xl font-black uppercase tracking-widest text-white mb-8 text-center">
-              Reglas del Test
-            </h1>
-
-            <div className="flex flex-col gap-4 w-full max-w-lg mb-10">
-              <div className="flex items-center gap-4 bg-white/5 border border-white/10 p-4 rounded-2xl">
-                <div className="w-12 h-12 rounded-xl bg-[#FF8C00] shadow-[0_0_20px_#FF8C00] shrink-0" />
-                <div>
-                  <h3 className="text-[#FF8C00] font-bold uppercase tracking-widest">Si es Naranjo</h3>
-                  <p className="text-white/60 text-sm">Gira la cara NARANJA (Derecha) lo más rápido posible.</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 bg-white/5 border border-white/10 p-4 rounded-2xl">
-                <div className="w-12 h-12 rounded-xl bg-[#FF0000] shadow-[0_0_20px_#FF0000] shrink-0" />
-                <div>
-                  <h3 className="text-[#FF0000] font-bold uppercase tracking-widest">Si es Rojo</h3>
-                  <p className="text-white/60 text-sm">Gira la cara ROJA (Izquierda) lo más rápido posible.</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 bg-white/5 border border-blue-500/20 p-4 rounded-2xl">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-white shadow-[0_0_15px_rgba(59,130,246,0.5)] shrink-0" />
-                <div>
-                  <h3 className="text-blue-400 font-bold uppercase tracking-widest">Si es Otro Color (Azul, Blanco)</h3>
-                  <p className="text-white/80 font-black text-sm uppercase">¡No muevas nada! Inhibe tu reacción.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-10 py-5 rounded-2xl bg-white/5 border border-red-500/30 flex flex-col items-center justify-center animate-pulse shadow-[0_0_30px_rgba(239,68,68,0.1)]">
-              <span className="text-[12px] font-black uppercase tracking-widest text-red-500 mb-1">Confirmar Lectura</span>
-              <span className="text-white font-black text-xl tracking-wide uppercase text-center">
-                MUEVE 2 VECES LA CARA ROJA (L2) <br /> PARA COMENZAR
-              </span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* ── FASE: JUEGO ── */}
       {stage !== 'rules' && (
         <>

@@ -238,13 +238,12 @@ export default function OnboardingForm({ onComplete, playerName }) {
     
     const now = Date.now();
     moveHistory.current.push({ m: movimiento, t: now });
-    // Limpiamos memoria de movimientos de hace más de 1.2 segundos
-    moveHistory.current = moveHistory.current.filter(x => now - x.t < 1200);
+    // Limpiamos memoria de movimientos de hace más de 3.5 segundos
+    moveHistory.current = moveHistory.current.filter(x => now - x.t < 3500);
 
-    // Detección Crítica L2 (Giro doble Cara Roja)
-    const lMoves = moveHistory.current.filter(x => x.m === 'L').length;
-    const lPrimeMoves = moveHistory.current.filter(x => x.m === "L'").length;
-    const isL2 = movimiento === 'L2' || lMoves >= 2 || lPrimeMoves >= 2;
+    // Detección Crítica L2 (Giro doble Cara Roja) - Muy tolerante
+    const lTotalMoves = moveHistory.current.filter(x => x.m === 'L' || x.m === "L'").length;
+    const isL2 = movimiento === 'L2' || movimiento === "L2'" || lTotalMoves >= 2;
 
     if (isL2) {
       moveHistory.current = []; // Flush
