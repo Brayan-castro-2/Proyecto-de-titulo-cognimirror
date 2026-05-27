@@ -195,7 +195,7 @@ export default function SimonGame({ onExit, playerName, sessionMeta, sessionStar
           animation: success-pulse 0.3s ease-out;
         }
       `}</style>
-      <div className={`min-h-screen bg-[#07080f] text-white font-sans flex flex-col selection:bg-[#c084fc]/30 w-full relative ${showErrorFlash ? 'animate-error-shake' : ''} ${successFlash ? 'animate-success-pulse' : ''}`}>
+      <div className={`h-screen overflow-hidden bg-[#07080f] text-white font-sans flex flex-col selection:bg-[#c084fc]/30 w-full relative ${showErrorFlash ? 'animate-error-shake' : ''} ${successFlash ? 'animate-success-pulse' : ''}`}>
         {showErrorFlash && (
           <div className="absolute inset-0 bg-red-600/30 z-[100] pointer-events-none transition-opacity duration-300" />
         )}
