@@ -154,21 +154,6 @@ export default function SimonGame({ onExit, playerName, sessionMeta, sessionStar
       telemetry
     };
 
-    // Guardar en la base de datos de memoria
-    const currentMemoryDB = JSON.parse(localStorage.getItem('cogniMirror_Memory_DB') || '[]');
-    currentMemoryDB.push(record);
-    localStorage.setItem('cogniMirror_Memory_DB', JSON.stringify(currentMemoryDB));
-
-    // Guardar en base de datos unificada de usuarios (cogniMirror_Users)
-    const pName = playerName || 'Anónimo';
-    const usersDB = JSON.parse(localStorage.getItem('cogniMirror_Users') || '{}');
-    if (!usersDB[pName]) {
-      usersDB[pName] = { playerName: pName, history: [] };
-    }
-    const userRecord = { ...record, gameType: 'memory' };
-    usersDB[pName].history.push(userRecord);
-    localStorage.setItem('cogniMirror_Users', JSON.stringify(usersDB));
-
     // Salir y mostrar el reporte clínico
     onExit(record);
   };
@@ -346,12 +331,12 @@ export default function SimonGame({ onExit, playerName, sessionMeta, sessionStar
         </div>
 
         {/* PANEL DERECHO: TELEMETRÍA (Solo visible en debug/clínico) */}
-        <div className="w-96 bg-[#13161e] border-l border-white/5 p-6 flex flex-col">
-          <h3 className="text-xs font-black uppercase tracking-[0.3em] text-white/40 mb-4 pb-4 border-b border-white/5">
+        <div className="w-96 bg-[#13161e] border-l border-white/5 p-6 flex flex-col min-h-0">
+          <h3 className="text-xs font-black uppercase tracking-[0.3em] text-white/40 mb-4 pb-4 border-b border-white/5 shrink-0">
             Telemetría en Vivo
           </h3>
           
-          <div className="flex-1 overflow-y-auto pr-2 space-y-2 font-mono text-xs custom-scrollbar">
+          <div className="flex-1 overflow-y-auto pr-2 space-y-2 font-mono text-xs custom-scrollbar min-h-0">
             {telemetry.length === 0 ? (
               <div className="text-white/20 italic">Esperando movimientos del cubo inteligente...</div>
             ) : (

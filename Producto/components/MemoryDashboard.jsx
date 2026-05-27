@@ -197,6 +197,48 @@ export default function MemoryDashboard({ record, onRestart, onExit }) {
           </div>
         </div>
 
+        {/* ── SECCIÓN 2: RADIOGRAFÍA POR MOVIMIENTOS ── */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8 mt-6 page-break-before">
+          <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+            📋 Radiografía por Movimientos
+          </h2>
+          <div className="space-y-3">
+            {(telemetry || []).map((t, idx) => {
+              let statusText = '', borderLine = '', dot = '';
+
+              if (t.isCorrect) {
+                statusText = `✅ Acierto. Tiempo de reacción: ${t.latencyMs} ms.`;
+                borderLine = 'border-emerald-100 bg-emerald-50/40';
+                dot = 'bg-emerald-500';
+              } else {
+                statusText = `❌ Te equivocaste. Giraste ${t.userFace} pero se esperaba ${t.expectedFace}.`;
+                borderLine = 'border-rose-200 bg-rose-50/60';
+                dot = 'bg-rose-500';
+              }
+
+              return (
+                <div key={idx} className={`flex gap-4 p-4 rounded-xl border ${borderLine} transition-all`}>
+                  <div className="flex flex-col items-center gap-1 flex-shrink-0 pt-1">
+                    <div className={`w-3 h-3 rounded-full ${dot}`} />
+                    {idx < (telemetry.length - 1) && <div className="w-px flex-1 bg-slate-200 min-h-[16px]" />}
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-black text-slate-500 text-sm">Nivel {t.level} (Intento {t.trial}) - Movimiento {idx + 1}</span>
+                      <div className="flex gap-2 text-xs">
+                        <span className="bg-slate-100 text-slate-700 rounded px-2 py-0.5 font-semibold">
+                          Esperado: {t.expectedFace}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-700">{statusText}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
       </div>
     </div>
   );
