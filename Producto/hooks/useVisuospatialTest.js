@@ -145,18 +145,12 @@ export function useVisuospatialTest() {
     if (isCorrect) {
       setCurrentLatencies(prev => [...prev, currentLatencyMs]);
     } else {
-      // Clasificación del error
-      if (currentLatencies.length > 0) {
-        avgLatency = currentLatencies.reduce((a, b) => a + b, 0) / currentLatencies.length;
-        if (currentLatencyMs <= avgLatency) {
-          errorType = 'impulsive_error';
-        } else if (currentLatencyMs > avgLatency * 1.3) {
-          errorType = 'memory_decay_error';
-        } else {
-          errorType = 'normal_error';
-        }
+      // Clasificación clínica del error (Análisis de Vulnerabilidad de Secuencia)
+      const halfLength = sequence.length / 2;
+      if (userIndex < halfLength) {
+        errorType = 'primacy';
       } else {
-        errorType = currentLatencyMs > 2000 ? 'memory_decay_error' : 'impulsive_error';
+        errorType = 'recency';
       }
     }
 

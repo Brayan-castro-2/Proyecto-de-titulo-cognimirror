@@ -138,6 +138,15 @@ export default function SimonGame({ onExit, playerName, sessionMeta, sessionStar
     const corsiSpan = level > 2 ? level - 1 : 0;
     const totalCorrectTrials = corsiSpan;
 
+    // Resistencia Supra-Span (Tolerancia a la Sobrecarga)
+    let supra_span_resistance_percentage = 0;
+    if (telemetry.length > 0) {
+      const lastMove = telemetry[telemetry.length - 1];
+      const lastLevelTelemetry = telemetry.filter(t => t.level === lastMove.level && t.trial === lastMove.trial);
+      const lastLevelCorrects = lastLevelTelemetry.filter(t => t.isCorrect).length;
+      supra_span_resistance_percentage = Math.round((lastLevelCorrects / lastMove.level) * 100);
+    }
+
     const record = {
       id: crypto.randomUUID(),
       playerName: playerName || 'Anónimo',
@@ -149,7 +158,8 @@ export default function SimonGame({ onExit, playerName, sessionMeta, sessionStar
         corsiSpan,
         totalCorrectTrials,
         totalErrors,
-        avgLatencyMs
+        avgLatencyMs,
+        supra_span_resistance_percentage
       },
       telemetry
     };
