@@ -698,7 +698,7 @@ export default function ReactionDashboard({
                 <div key={idx} className={`flex gap-4 p-4 rounded-xl border ${borderLine} transition-all`}>
                   <div className="flex flex-col items-center gap-1 flex-shrink-0 pt-1">
                     <div className={`w-3 h-3 rounded-full ${dot}`} />
-                    {idx < (rawTurnsData.length - 1) && <div className="w-px flex-1 bg-slate-200 min-h-[16px]" />}
+                    {idx < (actualTurnsData.length - 1) && <div className="w-px flex-1 bg-slate-200 min-h-[16px]" />}
                   </div>
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
