@@ -8,7 +8,7 @@ import Link from 'next/link';
 
 export default function PatientDirectory() {
   const router = useRouter();
-  const { patients, createPatient, migrateLocalToSupabase } = usePatientsDB();
+  const { patients, createPatient } = usePatientsDB();
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newPatientName, setNewPatientName] = useState('');
@@ -49,13 +49,6 @@ export default function PatientDirectory() {
           </div>
           
           <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
-            <button 
-              onClick={migrateLocalToSupabase}
-              className="text-xs text-white/40 hover:text-white border border-white/10 hover:border-white/30 px-4 py-2 rounded-none transition-colors"
-              title="Sube los pacientes guardados en tu navegador a la nube"
-            >
-              Restaurar Datos Locales
-            </button>
             <div className="relative group flex-1 md:w-64">
               <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-white/30 group-focus-within:text-blue-400 transition-colors">
                 <Search size={16} />

@@ -175,48 +175,6 @@ export function usePatientsDB() {
     }
   }, [fetchPatients]);
 
-  const migrateLocalToSupabase = useCallback(async () => {
-    try {
-      const stored = localStorage.getItem('cogniMirror_Patients');
-      if (!stored) {
-        alert("No hay datos locales para migrar.");
-        return;
-      }
-      const localPatients = JSON.parse(stored);
-      for (const p of localPatients) {
-        const partes = p.name.trim().split(' ');
-        const nombre = partes[0];
-        const apellido = partes.length > 1 ? partes.slice(1).join(' ') : '';
-        
-        const { data: newP, error: errP } = await supabase
-          .from('pacientes')
-          .insert([{ nombre, apellido, creado_en: p.createdAt }])
-          .select()
-          .single();
-        
-        if (errP) throw errP;
-
-        for (const s of (p.sessions || [])) {
-          await supabase
-            .from('sesiones_clinicas')
-            .insert([{
-              id_paciente: newP.id,
-              tipo_test: s.testType || 'reaction',
-              intento_numero: s.attemptNumber,
-              etiqueta_clinica: s.clinicalLabel,
-              estadisticas_json: s.stats || {},
-              fecha_sesion: s.date
-            }]);
-        }
-      }
-      alert("Migración a la nube completada exitosamente.");
-      await fetchPatients();
-    } catch (error) {
-      console.error(error);
-      alert("Error en migración: " + error.message);
-    }
-  }, [fetchPatients]);
-
   const getPatient = useCallback((id) => {
     return patients.find(p => p.id === id);
   }, [patients]);
@@ -230,7 +188,6 @@ export function usePatientsDB() {
     deletePatient,
     deleteSession,
     getPatient,
-    migrateLocalToSupabase,
     refreshData: fetchPatients
   };
 }
