@@ -30,7 +30,7 @@ export function usePatientsDB() {
         .from('resultados_juego_memoria')
         .select('*');
 
-      const mapPatients = pacientesData.map(p => ({
+      let mapPatients = pacientesData.map(p => ({
         id: p.id,
         name: `${p.nombre} ${p.apellido}`.trim(),
         createdAt: p.creado_en,
@@ -83,6 +83,84 @@ export function usePatientsDB() {
             };
           })
       }));
+
+      // Fallback local inteligente para recuperar telemetrías perdidas de ayer en este navegador
+      try {
+        const localData = typeof window !== 'undefined' ? localStorage.getItem('cogniMirror_Patients') : null;
+        if (localData) {
+          const localPatients = JSON.parse(localData);
+          mapPatients = mapPatients.map(sp => {
+            const lp = localPatients.find(x => x.name.trim().toLowerCase() === sp.name.trim().toLowerCase());
+            if (!lp) return sp;
+
+            return {
+              ...sp,
+              sessions: sp.sessions.map(ss => {
+                if (ss.rawTurnsData && ss.rawTurnsData.length > 0) return ss;
+                
+                // Si la sesión de Supabase no tiene telemetría, la buscamos en el localStorage local por coincidencia de fecha o intento
+                const localSession = lp.sessions?.find(ls => 
+                  ls.testType === ss.testType && 
+                  (ls.attemptNumber === ss.attemptNumber || Math.abs(new Date(ls.date) - new Date(ss.date)) < 30000)
+                );
+
+                if (localSession && localSession.rawTurnsData && localSession.rawTurnsData.length > 0) {
+                  console.log(`[Auto-Merge] Inyectada telemetría local de ayer para la sesión ${ss.sessionId} de ${sp.name}`);
+                  const telemetry = localSession.rawTurnsData;
+                  const statsPayload = {
+                    ...(ss.stats || {}),
+                    rawTurnsData: telemetry
+                  };
+                  
+                  // Auto-sincronización silenciosa y transparente en Supabase
+                  supabase.from('sesiones_clinicas')
+                    .update({ estadisticas_json: statsPayload })
+                    .eq('id', ss.sessionId)
+                    .then(({ error }) => {
+                      if (!error) console.log(`[Auto-Sync] Subida telemetría histórica de sesión ${ss.sessionId} a Supabase.`);
+                    });
+
+                  // Insertar en tablas relacionales para completitud
+                  if (ss.testType === 'reaction') {
+                    const rows = telemetry.map(t => ({
+                      id_sesion: ss.sessionId,
+                      nivel: t.round || t.level || 0,
+                      tiempo_reaccion_ms: t.time !== undefined ? t.time : (t.latencyMs !== undefined ? t.latencyMs : null),
+                      cara_esperada: t.expected || t.expectedFace,
+                      cara_girada: t.actualFace || t.userFace || null,
+                      es_correcto: t.status === 'Ok' || t.status === 'Corregido' || t.isCorrect || false,
+                      timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
+                    }));
+                    supabase.from('resultados_juego_reaccion').insert(rows).then(() => {});
+                  } else if (ss.testType === 'memory') {
+                    const rows = telemetry.map(t => ({
+                      id_sesion: ss.sessionId,
+                      nivel: t.level || 0,
+                      intento: t.trial || 'A',
+                      cara_esperada: t.expectedFace || t.expected || null,
+                      cara_girada: t.userFace || t.actualFace || null,
+                      es_correcto: t.isCorrect !== undefined ? t.isCorrect : (t.status === 'Ok' || t.status === 'Corregido'),
+                      latencia_ms: t.latencyMs !== undefined ? t.latencyMs : (t.time || null),
+                      array_latencias_intra: t.moveLatencies || null,
+                      tipo_error: t.errorType || null,
+                      timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
+                    }));
+                    supabase.from('resultados_juego_memoria').insert(rows).then(() => {});
+                  }
+
+                  return {
+                    ...ss,
+                    rawTurnsData: telemetry
+                  };
+                }
+                return ss;
+              })
+            };
+          });
+        }
+      } catch (errLocal) {
+        console.warn("[Auto-Merge] Error al sincronizar datos locales:", errLocal);
+      }
 
       setPatients(mapPatients);
     } catch (error) {
