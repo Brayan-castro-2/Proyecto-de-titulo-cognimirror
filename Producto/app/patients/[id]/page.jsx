@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { usePatientsDB } from '../../../hooks/usePatientsDB';
 import PatientEvolutionDashboard from '../../../components/PatientEvolutionDashboard';
 import ReactionDashboard from '../../../components/ReactionDashboard';
+import MemoryDashboard from '../../../components/MemoryDashboard';
 import { ArrowLeft, Activity, Brain, Calendar, Clock, ChevronRight, TrendingUp } from 'lucide-react';
 
 function LocalDataRestorer({ patientName, sessions }) {
@@ -340,19 +341,15 @@ export default function PatientProfileDashboard() {
               patient={patient}
             />
           ) : (
-            <div className="min-h-screen flex flex-col items-center justify-center p-8">
-              <Brain size={64} className="text-purple-500 mb-6 opacity-50" />
-              <h2 className="text-2xl font-bold text-white mb-2">Memory Mirror Dashboard</h2>
-              <p className="text-slate-400 mb-8 max-w-md text-center">El panel de radiografía detallada para Memory Mirror estará disponible próximamente en la siguiente iteración.</p>
-              <button 
-                onClick={() => setSelectedSessionRecord(null)}
-                className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-colors"
-              >
-                Cerrar Modal
-              </button>
-            </div>
-          )}
-        </div>
+            <MemoryDashboard
+              record={{
+                ...selectedSessionRecord,
+                playerName: patient.name,
+                patient
+              }}
+              onExit={() => setSelectedSessionRecord(null)}
+            />
+          )}        </div>
       )}
 
     </div>

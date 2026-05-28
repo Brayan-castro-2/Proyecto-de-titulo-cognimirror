@@ -55,7 +55,9 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function MemoryDashboard({ record, onRestart, onExit }) {
-  const { playerName, date, telemetry, metrics } = record;
+  const { playerName, date } = record;
+  const telemetry = record.telemetry || record.rawTurnsData || [];
+  const metrics = record.metrics || record.stats || {};
   const m = analyzeMemoryData(telemetry, metrics?.maxLevelReached || 2);
   
   const handlePrint = () => window.print();
@@ -93,9 +95,11 @@ export default function MemoryDashboard({ record, onRestart, onExit }) {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap md:flex-nowrap flex-shrink-0 no-print">
-          <button onClick={onRestart} className="px-4 py-2 rounded-xl border border-slate-200 bg-white font-bold text-slate-600 hover:bg-slate-50 shadow-sm transition-all text-sm">
-            🔄 Rehacer
-          </button>
+          {onRestart && (
+            <button onClick={onRestart} className="px-4 py-2 rounded-xl border border-slate-200 bg-white font-bold text-slate-600 hover:bg-slate-50 shadow-sm transition-all text-sm">
+              🔄 Rehacer
+            </button>
+          )}
           <button onClick={handlePrint} className="px-4 py-2 rounded-xl bg-slate-800 font-bold text-white hover:bg-slate-900 shadow-sm transition-all text-sm">
             🖨️ PDF
           </button>
