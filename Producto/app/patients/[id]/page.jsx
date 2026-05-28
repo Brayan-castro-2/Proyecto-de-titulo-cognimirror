@@ -1,11 +1,151 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { usePatientsDB } from '../../../hooks/usePatientsDB';
 import PatientEvolutionDashboard from '../../../components/PatientEvolutionDashboard';
 import ReactionDashboard from '../../../components/ReactionDashboard';
 import { ArrowLeft, Activity, Brain, Calendar, Clock, ChevronRight, TrendingUp } from 'lucide-react';
+
+function LocalDataRestorer({ patientName, sessions }) {
+  const [pendingCount, setPendingCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+
+  useEffect(() => {
+    try {
+      const localData = localStorage.getItem('cogniMirror_Patients');
+      if (localData) {
+        const localPatients = JSON.parse(localData);
+        // Coincidencia de nombres flexible e inteligente
+        const lp = localPatients.find(x => 
+          x.name.trim().toLowerCase().includes(patientName.trim().toLowerCase()) || 
+          patientName.trim().toLowerCase().includes(x.name.trim().toLowerCase())
+        );
+        if (lp && lp.sessions) {
+          // Filtramos las sesiones de Supabase que no tengan telemetría en la nube pero sí tengan en local
+          const pending = sessions.filter(ss => {
+            const hasCloudTurns = ss.rawTurnsData && ss.rawTurnsData.length > 0;
+            if (hasCloudTurns) return false;
+
+            const localSession = lp.sessions.find(ls => 
+              ls.testType === ss.testType && 
+              (ls.attemptNumber === ss.attemptNumber || Math.abs(new Date(ls.date) - new Date(ss.date)) < 60000)
+            );
+            return localSession && localSession.rawTurnsData && localSession.rawTurnsData.length > 0;
+          });
+          setPendingCount(pending.length);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [patientName, sessions]);
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    setSyncMessage('Parchando base de datos Supabase en la nube...');
+    try {
+      const { supabase } = await import('../../../utils/supabaseClient');
+      const localData = localStorage.getItem('cogniMirror_Patients');
+      const localPatients = JSON.parse(localData);
+      const lp = localPatients.find(x => 
+        x.name.trim().toLowerCase().includes(patientName.trim().toLowerCase()) || 
+        patientName.trim().toLowerCase().includes(x.name.trim().toLowerCase())
+      );
+
+      let successCount = 0;
+      for (const ss of sessions) {
+        const hasCloudTurns = ss.rawTurnsData && ss.rawTurnsData.length > 0;
+        if (hasCloudTurns) continue;
+
+        const localSession = lp.sessions.find(ls => 
+          ls.testType === ss.testType && 
+          (ls.attemptNumber === ss.attemptNumber || Math.abs(new Date(ls.date) - new Date(ss.date)) < 60000)
+        );
+
+        if (localSession && localSession.rawTurnsData && localSession.rawTurnsData.length > 0) {
+          const telemetry = localSession.rawTurnsData;
+          const statsPayload = {
+            ...(ss.stats || {}),
+            rawTurnsData: telemetry
+          };
+
+          // 1. Sincronizar en sesiones_clinicas (JSONB)
+          await supabase.from('sesiones_clinicas')
+            .update({ estadisticas_json: statsPayload })
+            .eq('id', ss.sessionId);
+
+          // 2. Insertar en tablas relacionales para consistencia del plan de pruebas
+          if (ss.testType === 'reaction') {
+            const rows = telemetry.map(t => ({
+              id_sesion: ss.sessionId,
+              nivel: t.round || t.level || 0,
+              tiempo_reaccion_ms: t.time !== undefined ? t.time : (t.latencyMs !== undefined ? t.latencyMs : null),
+              cara_esperada: t.expected || t.expectedFace,
+              cara_girada: t.actualFace || t.userFace || null,
+              es_correcto: t.status === 'Ok' || t.status === 'Corregido' || t.isCorrect || false,
+              timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
+            }));
+            await supabase.from('resultados_juego_reaccion').insert(rows);
+          } else if (ss.testType === 'memory') {
+            const rows = telemetry.map(t => ({
+              id_sesion: ss.sessionId,
+              nivel: t.level || 0,
+              intento: t.trial || 'A',
+              cara_esperada: t.expectedFace || t.expected || null,
+              cara_girada: t.userFace || t.actualFace || null,
+              es_correcto: t.isCorrect !== undefined ? t.isCorrect : (t.status === 'Ok' || t.status === 'Corregido'),
+              latencia_ms: t.latencyMs !== undefined ? t.latencyMs : (t.time || null),
+              array_latencias_intra: t.moveLatencies || null,
+              tipo_error: t.errorType || null,
+              timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
+            }));
+            await supabase.from('resultados_juego_memoria').insert(rows);
+          }
+          successCount++;
+        }
+      }
+      setSyncMessage(`¡Completado! Se inyectaron y sincronizaron ${successCount} sesiones con éxito.`);
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (e) {
+      console.error(e);
+      setSyncMessage('Error durante la restauración: ' + e.message);
+      setIsSyncing(false);
+    }
+  };
+
+  if (pendingCount === 0) return null;
+
+  return (
+    <div className="bg-amber-500/10 border border-amber-500/30 p-6 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4 w-full shadow-lg relative overflow-hidden selection:bg-amber-500/20">
+      <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500" />
+      <div>
+        <h3 className="text-amber-400 font-black text-lg flex items-center gap-2">
+          ⚠️ Datos Clínicos Locales Detectados
+        </h3>
+        <p className="text-slate-400 text-sm mt-1">
+          Encontramos {pendingCount} sesión(es) de ayer con telemetría detallada en este navegador que no se guardaron en la nube de Supabase.
+        </p>
+        {syncMessage && (
+          <p className="text-emerald-400 font-bold text-xs mt-2 uppercase tracking-wider animate-pulse">
+            {syncMessage}
+          </p>
+        )}
+      </div>
+      {!isSyncing && (
+        <button 
+          onClick={handleSync}
+          className="px-5 py-3 bg-amber-500 hover:bg-amber-600 active:scale-95 transition-all text-black font-black uppercase text-[10px] tracking-widest rounded-xl shrink-0 shadow-md shadow-amber-500/10 cursor-pointer"
+        >
+          Restaurar Datos de Ayer
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default function PatientProfileDashboard() {
   const params = useParams();
@@ -83,6 +223,8 @@ export default function PatientProfileDashboard() {
 
       <div className="max-w-7xl mx-auto px-6 mt-8 space-y-10">
         
+        <LocalDataRestorer patientName={patient.name} sessions={tabSessions} />
+
         {/* ÁREA SUPERIOR: GRÁFICOS GENERALES (PatientEvolutionDashboard embebido) */}
         <section>
           <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
