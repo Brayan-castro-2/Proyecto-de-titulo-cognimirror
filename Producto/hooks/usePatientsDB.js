@@ -21,20 +21,67 @@ export function usePatientsDB() {
         
       if (errSesiones) throw errSesiones;
 
+      // Consulta de telemetría atómica para compatibilidad con registros antiguos
+      const { data: reaccionData } = await supabase
+        .from('resultados_juego_reaccion')
+        .select('*');
+
+      const { data: memoriaData } = await supabase
+        .from('resultados_juego_memoria')
+        .select('*');
+
       const mapPatients = pacientesData.map(p => ({
         id: p.id,
         name: `${p.nombre} ${p.apellido}`.trim(),
         createdAt: p.creado_en,
         sessions: sesionesData
           .filter(s => s.id_paciente === p.id)
-          .map(s => ({
-            sessionId: s.id,
-            testType: s.tipo_test,
-            attemptNumber: s.intento_numero,
-            clinicalLabel: s.etiqueta_clinica,
-            date: s.fecha_sesion,
-            stats: s.estadisticas_json
-          }))
+          .map(s => {
+            let rawTurns = s.estadisticas_json?.rawTurnsData || [];
+            
+            // Reconstrucción desde BD relacional si no existe en el JSON consolidado (datos históricos)
+            if (rawTurns.length === 0) {
+              if (s.tipo_test === 'reaction') {
+                const filtrados = reaccionData?.filter(r => r.id_sesion === s.id) || [];
+                rawTurns = filtrados.map(r => ({
+                  round: r.nivel || 1,
+                  type: r.cara_esperada ? (r.cara_esperada !== 'L' && r.cara_esperada !== 'R' ? 'NOGO' : 'GO') : 'NOGO',
+                  expected: r.cara_esperada,
+                  actualFace: r.cara_girada,
+                  time: r.tiempo_reaccion_ms,
+                  errors: r.es_correcto ? 0 : 1,
+                  timeout: r.tiempo_reaccion_ms === null || r.tiempo_reaccion_ms === 0,
+                  fail: !r.es_correcto && (r.cara_esperada !== 'L' && r.cara_esperada !== 'R'),
+                  isFalseStart: !r.es_correcto && (r.cara_esperada !== 'L' && r.cara_esperada !== 'R'),
+                  isOmission: r.tiempo_reaccion_ms === null || r.tiempo_reaccion_ms === 0,
+                  status: r.es_correcto ? 'Ok' : 'Error'
+                }));
+              } else if (s.tipo_test === 'memory') {
+                const filtrados = memoriaData?.filter(m => m.id_sesion === s.id) || [];
+                rawTurns = filtrados.map(m => ({
+                  level: m.nivel,
+                  trial: m.intento,
+                  expectedFace: m.cara_esperada,
+                  userFace: m.cara_girada,
+                  isCorrect: m.es_correcto,
+                  latencyMs: m.latencia_ms,
+                  moveLatencies: m.array_latencias_intra,
+                  errorType: m.tipo_error,
+                  timestamp: m.timestamp_local
+                }));
+              }
+            }
+
+            return {
+              sessionId: s.id,
+              testType: s.tipo_test,
+              attemptNumber: s.intento_numero,
+              clinicalLabel: s.etiqueta_clinica,
+              date: s.fecha_sesion,
+              stats: s.estadisticas_json,
+              rawTurnsData: rawTurns
+            };
+          })
       }));
 
       setPatients(mapPatients);
@@ -91,6 +138,12 @@ export function usePatientsDB() {
       else if (attemptNumber === 2) label = 'Línea Base';
       else label = 'Evaluación de Seguimiento';
 
+      const telemetryData = sessionData.telemetry || sessionData.rawTurnsData || [];
+      const statsPayload = {
+        ...(sessionData.metrics || sessionData.stats || {}),
+        rawTurnsData: telemetryData
+      };
+
       const { data: sessionInfo, error: sessionErr } = await supabase
         .from('sesiones_clinicas')
         .insert([{
@@ -98,7 +151,7 @@ export function usePatientsDB() {
           tipo_test: testType,
           intento_numero: attemptNumber,
           etiqueta_clinica: label,
-          estadisticas_json: sessionData.metrics || {}
+          estadisticas_json: statsPayload
         }])
         .select()
         .single();
@@ -111,30 +164,31 @@ export function usePatientsDB() {
         attemptNumber,
         clinicalLabel: label,
         date: sessionInfo.fecha_sesion,
-        stats: sessionInfo.estadisticas_json
+        stats: sessionInfo.estadisticas_json,
+        rawTurnsData: telemetryData
       };
 
-      if (sessionData.telemetry && sessionData.telemetry.length > 0) {
+      if (telemetryData && telemetryData.length > 0) {
         if (testType === 'reaction') {
-          const rows = sessionData.telemetry.map(t => ({
+          const rows = telemetryData.map(t => ({
             id_sesion: sessionInfo.id,
-            nivel: t.level || 0,
-            tiempo_reaccion_ms: t.latencyMs,
-            cara_esperada: t.expectedFace,
-            cara_girada: t.userFace,
-            es_correcto: t.isCorrect,
+            nivel: t.round || t.level || 0,
+            tiempo_reaccion_ms: t.time !== undefined ? t.time : (t.latencyMs !== undefined ? t.latencyMs : null),
+            cara_esperada: t.expected || t.expectedFace,
+            cara_girada: t.actualFace || t.userFace || null,
+            es_correcto: t.status === 'Ok' || t.status === 'Corregido' || t.isCorrect || false,
             timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
           }));
           await supabase.from('resultados_juego_reaccion').insert(rows);
         } else if (testType === 'memory') {
-          const rows = sessionData.telemetry.map(t => ({
+          const rows = telemetryData.map(t => ({
             id_sesion: sessionInfo.id,
             nivel: t.level || 0,
             intento: t.trial || 'A',
-            cara_esperada: t.expectedFace,
-            cara_girada: t.userFace,
-            es_correcto: t.isCorrect,
-            latencia_ms: t.latencyMs,
+            cara_esperada: t.expectedFace || t.expected || null,
+            cara_girada: t.userFace || t.actualFace || null,
+            es_correcto: t.isCorrect !== undefined ? t.isCorrect : (t.status === 'Ok' || t.status === 'Corregido'),
+            latencia_ms: t.latencyMs !== undefined ? t.latencyMs : (t.time || null),
             array_latencias_intra: t.moveLatencies || null,
             tipo_error: t.errorType || null,
             timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
