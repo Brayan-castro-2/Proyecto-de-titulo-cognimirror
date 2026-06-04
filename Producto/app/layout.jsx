@@ -3,6 +3,8 @@ import Script from 'next/script';
 import { BluetoothProvider } from '../contexts/BluetoothContext';
 import { CubeStateProvider } from '../contexts/CubeStateContext';
 import { JoicubeProvider } from '../contexts/JoicubeContext';
+import { AuthProvider } from '../contexts/AuthContext';
+import AuthGuard from '../components/AuthGuard';
 
 export const metadata = {
   title: 'CogniMirror Cube',
@@ -22,13 +24,17 @@ export default function RootLayout({ children }) {
           src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"
           strategy="beforeInteractive"
         />
-        <BluetoothProvider>
-          <CubeStateProvider>
-            <JoicubeProvider>
-              {children}
-            </JoicubeProvider>
-          </CubeStateProvider>
-        </BluetoothProvider>
+        <AuthProvider>
+          <AuthGuard>
+            <BluetoothProvider>
+              <CubeStateProvider>
+                <JoicubeProvider>
+                  {children}
+                </JoicubeProvider>
+              </CubeStateProvider>
+            </BluetoothProvider>
+          </AuthGuard>
+        </AuthProvider>
       </body>
     </html>
   );

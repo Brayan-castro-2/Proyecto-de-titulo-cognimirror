@@ -7,6 +7,7 @@ import { useCubeState } from '../../contexts/CubeStateContext';
 import { useJoicube } from '../../contexts/JoicubeContext';
 import Cube3DViewer from '../../components/Cube3DViewer';
 import MoveFeedOverlay from '../../components/MoveFeedOverlay';
+import { useAuth } from '../../contexts/AuthContext';
 
 // ─── Utilidad: formatear tiempo ───────────────────────────────
 function formatTime(ms) {
@@ -20,6 +21,7 @@ export default function ClassicDashboard() {
   const { isConnected, device, connectBLE, batteryLevel, subscribeToMoves, broadcastMove, calibrateGyro } = useBluetoothCube();
   const { moveHistory, cubeRotation, resetCubeState } = useCubeState();
   const joicube = useJoicube();
+  const { user, signOut } = useAuth();
 
   const [activeTab, setActiveTab] = useState('session');
   // Lógica de stats vive en refs para performance
@@ -267,6 +269,16 @@ export default function ClassicDashboard() {
             <div className="header-stat">TPS: <strong id="hdr-tps">0.00</strong></div>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            {user && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', borderRight: '1px solid var(--border)', paddingRight: 12, marginRight: 2 }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text)' }}>
+                  Ps. {user.user_metadata?.full_name || 'Especialista'}
+                </span>
+                <span style={{ fontSize: '0.65rem', color: 'var(--muted)', fontWeight: 600 }}>
+                  Sesión Activa
+                </span>
+              </div>
+            )}
             <Link href="/patients" className="cube-btn" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text)', borderColor: 'rgba(255,255,255,0.1)' }}>👥 Pacientes</Link>
             <Link href="/reaction-game" className="cube-btn" style={{ background: 'rgba(37,99,235,0.1)', color: 'var(--accent)' }}>⚡ Reaction Mirror</Link>
             <Link href="/simon-game" className="cube-btn" style={{ background: 'rgba(168,85,247,0.1)', color: '#c084fc', borderColor: 'rgba(168,85,247,0.3)' }}>🧬 Memory Mirror</Link>
@@ -274,6 +286,14 @@ export default function ClassicDashboard() {
               <div className={`ble-dot ${isConnected ? 'ok' : ''}`} />
               <span>{isConnected ? device : 'Conectar'}</span>
             </div>
+            <button 
+              onClick={signOut} 
+              className="cube-btn" 
+              style={{ background: 'rgba(239,68,68,0.08)', color: 'var(--red)', borderColor: 'rgba(239,68,68,0.2)', fontWeight: 700 }}
+              title="Cerrar Sesión"
+            >
+              🔒 Salir
+            </button>
           </div>
         </header>
 
