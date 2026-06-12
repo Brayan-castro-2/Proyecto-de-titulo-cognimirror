@@ -379,8 +379,9 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
   // Atajos teclado
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'ArrowRight') handleMove('R');
-      if (e.key === 'ArrowLeft') handleMove('L');
+      const keyUpper = e.key.toUpperCase();
+      if (e.key === 'ArrowRight' || keyUpper === 'L') handleMove('R');
+      if (e.key === 'ArrowLeft' || keyUpper === 'A') handleMove('L');
       if (e.key === 'ArrowUp') handleMove('U');
       if (e.key === 'Enter') handleMove('L2');
     };
