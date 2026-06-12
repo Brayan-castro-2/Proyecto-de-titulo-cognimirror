@@ -14,16 +14,14 @@ function generateDeck() {
     { id: 'NONE', label: 'AZUL', hex: '#3b82f6', type: 'NOGO' }
   ];
 
-  // Ratio Clínico 80/20 (aprox). 10 GO, 2 o 3 NOGO
-  const numNogo = Math.random() > 0.5 ? 2 : 3;
-  const TOTAL_ROUNDS = 10 + numNogo;
+  const TOTAL_ROUNDS = 40;
 
   let validDeck = false;
   let attempt = [];
 
   while (!validDeck) {
     attempt = [];
-    let counts = { R: 5, L: 5, NOGO: numNogo };
+    let counts = { R: 16, L: 16, NOGO: 8 };
     let failed = false;
 
     for (let i = 0; i < TOTAL_ROUNDS; i++) {
@@ -181,7 +179,7 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
             stageRef.current = 'waiting';
             setRound(r => r + 1);
             setTimeout(() => setFlash(null), 300);
-          }, 1500);
+          }, 800);
         }
 
       }, waitTime);
