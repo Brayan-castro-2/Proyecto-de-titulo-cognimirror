@@ -76,7 +76,7 @@ function generateDeck() {
 }
 
 export default function ReactionGame({ onExit, activePatientId, addSession, getPatient, sessionMeta, sessionStartTime, isWarmup = false }) {
-  const { subscribeToMoves } = useBluetoothCube();
+  const { subscribeToMoves, isConnected, openScanner } = useBluetoothCube();
   const { cubeRotation: globalRotation } = useCubeState();
   const { deactivate: deactivateJoicube } = useJoicube();
 
@@ -131,8 +131,21 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
   // Tiempos Maestros
   const gameStartTimeRef = useRef(null);
 
+  // --- PAUSA POR DESCONEXIÓN BLE ---
+  useEffect(() => {
+    if (!isConnected && stage !== 'finished' && stage !== 'rules' && round < deck.length) {
+      if (nogoTimeoutRef.current) clearTimeout(nogoTimeoutRef.current);
+      if (goTimeoutRef.current) clearTimeout(goTimeoutRef.current);
+      setStage('waiting');
+      stageRef.current = 'waiting';
+      setFlash(null);
+    }
+  }, [isConnected, stage, round, deck?.length]);
+
   // ── CICLO DEL JUEGO ──
   useEffect(() => {
+    if (!isConnected) return; // Si no hay conexión, pausar programación de estímulos
+
     if (stage === 'waiting' && round < deck.length) {
       // Ritmo Inter-Estímulo (ISI): Aleatorio estricto para crear 'Arousal' (400ms - 800ms)
       const waitTime = 400 + Math.random() * 400; 
@@ -213,7 +226,7 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
         setWarmupFinished(true);
       }
     }
-  }, [stage, round, deck]);
+  }, [stage, round, deck, isConnected]);
   
   const persistData = () => {
     const goResults = results.filter(r => r.type === 'GO' && !r.timeout);
@@ -376,6 +389,44 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
   }, [handleMove]);
 
   // ── RENDER ──
+  // --- PAUSA POR DESCONEXIÓN ---
+  const isGameActive = stage !== 'finished' && stage !== 'rules' && round < deck.length;
+  const showDisconnectOverlay = !isConnected && isGameActive;
+
+  if (showDisconnectOverlay) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center bg-[#07080f]/95 text-white absolute inset-0 z-[100] font-sans select-none">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] rounded-full bg-red-600/10 blur-[130px]" />
+        </div>
+        
+        <div className="relative z-10 flex flex-col items-center max-w-sm">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-3xl mb-6 shadow-lg shadow-red-500/5 animate-pulse">
+            ⚠️
+          </div>
+          <h2 className="text-2xl font-black mb-3 text-white tracking-tight uppercase">Conexión Perdida</h2>
+          <p className="text-slate-400 text-xs font-semibold leading-relaxed mb-8">
+            Se ha interrumpido la conexión Bluetooth con el cubo inteligente. Hemos pausado la prueba para que no pierdas tu progreso.
+          </p>
+          
+          <button
+            onClick={openScanner}
+            className="w-full py-4.5 bg-gradient-to-r from-red-600 to-pink-600 hover:shadow-[0_0_30px_rgba(220,38,38,0.3)] hover:scale-105 active:scale-95 transition-all text-white font-black uppercase text-[10px] tracking-widest rounded-2xl cursor-pointer mb-4 animate-pulse"
+          >
+            Reconectar Cubo
+          </button>
+          
+          <button
+            onClick={() => onExit(null)}
+            className="w-full py-4.5 bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-slate-300 font-bold uppercase text-[10px] tracking-widest rounded-2xl cursor-pointer"
+          >
+            Abandonar Prueba
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (isWarmup && warmupFinished) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center bg-[#07080f] text-white absolute inset-0 z-50 font-sans select-none">

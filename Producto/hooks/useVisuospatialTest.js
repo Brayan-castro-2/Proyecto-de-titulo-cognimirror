@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 const VALID_FACES = ['U', 'D', 'R', 'L', 'F'];
 
-export function useVisuospatialTest() {
+export function useVisuospatialTest(isConnected = true) {
   const [gameState, setGameState] = useState('idle'); // idle, showing_sequence, waiting_for_user, finished
   const [level, setLevel] = useState(2); // Comienza en nivel 2 (span de longitud 2)
   const [trial, setTrial] = useState('A'); // 'A' o 'B' para el doble intento clínico
@@ -53,11 +53,24 @@ export function useVisuospatialTest() {
     lastInputTimeRef.current = 0;
   }, [generateSequence]);
 
+  // --- PAUSA POR DESCONEXIÓN BLE ---
+  useEffect(() => {
+    if (!isConnected && gameState !== 'idle' && gameState !== 'finished') {
+      if (playbackTimeoutRef.current) clearTimeout(playbackTimeoutRef.current);
+      setActiveFace(null);
+      setShowingIndex(-1);
+      setGameState('showing_sequence');
+      setUserIndex(0);
+    }
+  }, [isConnected, gameState]);
+
   /**
    * Reproducción de Secuencia (Gemelo Digital)
    * Recorre la secuencia actual encendiendo/apagando caras.
    */
   useEffect(() => {
+    if (!isConnected) return; // Si no hay conexión, pausar reproducción
+
     if (gameState === 'showing_sequence' && sequence.length > 0) {
       let index = 0;
       let isMounted = true;
@@ -103,7 +116,7 @@ export function useVisuospatialTest() {
         if (playbackTimeoutRef.current) clearTimeout(playbackTimeoutRef.current);
       };
     }
-  }, [gameState, sequence]);
+  }, [gameState, sequence, isConnected]);
 
   /**
    * Manejador de Input del Usuario
