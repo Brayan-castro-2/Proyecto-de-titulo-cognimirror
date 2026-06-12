@@ -125,6 +125,7 @@ export default function ReactionDashboard({
   patient
 }) {
   const [chartFilter, setChartFilter] = useState('ALL');
+  const [showAllTurns, setShowAllTurns] = useState(false);
   
   const isDemoData = !rawTurnsData || rawTurnsData.length === 0;
   const actualTurnsData = useMemo(() => {
@@ -662,7 +663,7 @@ export default function ReactionDashboard({
             📋 Radiografía por Turnos
           </h2>
           <div className="space-y-3">
-            {(actualTurnsData || []).slice(0, 15).map((t, idx) => {
+            {(showAllTurns ? actualTurnsData : (actualTurnsData || []).slice(0, 15)).map((t, idx, arr) => {
               const waitSec = (t.waitTimeMs ? t.waitTimeMs / 1000 : 1).toFixed(1);
               let statusText = '', borderLine = '', dot = '';
 
@@ -698,7 +699,7 @@ export default function ReactionDashboard({
                 <div key={idx} className={`flex gap-4 p-4 rounded-xl border ${borderLine} transition-all`}>
                   <div className="flex flex-col items-center gap-1 flex-shrink-0 pt-1">
                     <div className={`w-3 h-3 rounded-full ${dot}`} />
-                    {idx < (actualTurnsData.length - 1) && <div className="w-px flex-1 bg-slate-200 min-h-[16px]" />}
+                    {idx < (arr.length - 1) && <div className="w-px flex-1 bg-slate-200 min-h-[16px]" />}
                   </div>
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -715,6 +716,17 @@ export default function ReactionDashboard({
               );
             })}
           </div>
+
+          {actualTurnsData.length > 15 && (
+            <div className="flex justify-center pt-4 border-t border-slate-100 mt-4 no-print">
+              <button
+                onClick={() => setShowAllTurns(!showAllTurns)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition-all cursor-pointer shadow-sm active:scale-95"
+              >
+                {showAllTurns ? 'Mostrar menos ↩' : `Ver más (${actualTurnsData.length - 15} turnos restantes) ➕`}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── SECCIÓN 4: GLOSARIO Y METODOLOGÍA CLÍNICA ── */}
