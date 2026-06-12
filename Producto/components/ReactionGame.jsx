@@ -75,10 +75,29 @@ function generateDeck() {
   });
 }
 
-export default function ReactionGame({ onExit, activePatientId, addSession, getPatient, sessionMeta, sessionStartTime }) {
+export default function ReactionGame({ onExit, activePatientId, addSession, getPatient, sessionMeta, sessionStartTime, isWarmup = false }) {
   const { subscribeToMoves } = useBluetoothCube();
   const { cubeRotation: globalRotation } = useCubeState();
   const { deactivate: deactivateJoicube } = useJoicube();
+
+  // --- WARMUP TIMER ---
+  const [warmupTimeLeft, setWarmupTimeLeft] = useState(15);
+  const [warmupFinished, setWarmupFinished] = useState(false);
+
+  useEffect(() => {
+    if (!isWarmup) return;
+    const timer = setInterval(() => {
+      setWarmupTimeLeft(t => {
+        if (t <= 1) {
+          clearInterval(timer);
+          setWarmupFinished(true);
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isWarmup]);
 
   // Al montar: desactivar Joicube para que el cubo vuelva a BLE nativo
   useEffect(() => {
@@ -188,7 +207,11 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
     } else if (stage === 'waiting' && round >= deck.length) {
       setStage('finished');
       stageRef.current = 'finished';
-      persistData();
+      if (!isWarmup) {
+        persistData();
+      } else {
+        setWarmupFinished(true);
+      }
     }
   }, [stage, round, deck]);
   
@@ -353,6 +376,32 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
   }, [handleMove]);
 
   // ── RENDER ──
+  if (isWarmup && warmupFinished) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center bg-[#07080f] text-white absolute inset-0 z-50 font-sans select-none">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] rounded-full bg-orange-600/10 blur-[130px]" />
+        </div>
+        
+        <div className="relative z-10 flex flex-col items-center max-w-sm">
+          <div className="w-16 h-16 rounded-2xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-3xl mb-6 shadow-lg shadow-orange-500/5 animate-bounce">
+            🔥
+          </div>
+          <h2 className="text-2xl font-black mb-3 text-white tracking-tight uppercase">Calentamiento Finalizado</h2>
+          <p className="text-slate-400 text-xs font-semibold leading-relaxed mb-8">
+            Has completado la práctica libre de 15 segundos. Ahora ya sabes cómo reaccionar a las caras del cubo Rubik según los colores de la pantalla.
+          </p>
+          <button
+            onClick={() => onExit(null)}
+            className="w-full py-4.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:shadow-[0_0_30px_rgba(249,115,22,0.3)] hover:scale-105 active:scale-95 transition-all text-white font-black uppercase text-[10px] tracking-widest rounded-2xl cursor-pointer"
+          >
+            Entendido, volver al menú
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const activeColor = stage === 'stimulus' ? targetRef.current.hex : 'transparent';
   let bgColorClass = 'bg-[#07080f]';
   if (flash === 'red') bgColorClass = 'bg-[#4a0000]';
@@ -361,6 +410,12 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
 
   return (
     <div className={`relative w-full h-screen overflow-hidden flex items-center justify-center transition-colors duration-[0.1s] ${bgColorClass}`}>
+      {isWarmup && (
+        <div className="absolute top-5 left-1/2 -translate-x-1/2 z-40 px-5 py-2.5 bg-orange-500/10 border border-orange-500/25 rounded-full flex items-center gap-3 text-[10px] font-black text-orange-400 uppercase tracking-widest backdrop-blur-md shadow-lg shadow-orange-500/5 select-none">
+          <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping shrink-0" />
+          Modo Calentamiento (Tiempo: {warmupTimeLeft}s)
+        </div>
+      )}
       
       {/* ── FASE: JUEGO ── */}
       {stage !== 'rules' && (

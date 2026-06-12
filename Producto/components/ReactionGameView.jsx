@@ -144,7 +144,7 @@ function CountdownPhase({ onComplete }) {
 }
 
 // ── ESTADO 1: MENÚ ──────────────────────────────────────────
-function StepMenu({ onNext, onHistory, activePatient, setActivePatientId, patients, createPatient }) {
+function StepMenu({ onStartWarmup, onStartOfficial, onHistory, activePatient, setActivePatientId, patients, createPatient }) {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const {
     isConnected,
@@ -200,25 +200,40 @@ function StepMenu({ onNext, onHistory, activePatient, setActivePatientId, patien
           }}
         />
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           <button
-            onClick={onNext}
+            onClick={onStartWarmup}
             disabled={!activePatient || !acceptedTerms}
             className={`
-              relative group px-10 py-5 rounded-2xl font-bold text-xl text-white
-              transition-all duration-200 ease-out shadow-[0_0_40px_rgba(168,85,247,0.4)]
+              relative group px-8 py-5 rounded-2xl font-bold text-lg text-white
+              transition-all duration-200 ease-out shadow-[0_0_30px_rgba(249,115,22,0.3)]
               ${(activePatient && acceptedTerms)
-                ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:shadow-[0_0_60px_rgba(168,85,247,0.6)] hover:scale-105 active:scale-95 cursor-pointer' 
+                ? 'bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 hover:shadow-[0_0_50px_rgba(249,115,22,0.5)] hover:scale-105 active:scale-95 cursor-pointer' 
                 : 'bg-white/10 text-white/40 cursor-not-allowed shadow-none'}
             `}
           >
-            Iniciar Test
+            Modo Calentamiento (15 seg)
+            <span className="ml-3 inline-block group-hover:translate-x-1 transition-transform">🔥</span>
+          </button>
+
+          <button
+            onClick={onStartOfficial}
+            disabled={!activePatient || !acceptedTerms}
+            className={`
+              relative group px-8 py-5 rounded-2xl font-bold text-lg text-white
+              transition-all duration-200 ease-out shadow-[0_0_40px_rgba(168,85,247,0.4)]
+              ${(activePatient && acceptedTerms)
+                ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:shadow-[0_0_60px_rgba(168,85,247,0.6)] hover:scale-105 active:scale-95 cursor-pointer' 
+                : 'bg-white/10 text-white/40 cursor-not-allowed shadow-none'}
+            `}
+          >
+            Iniciar Evaluación Oficial
             <span className="ml-3 inline-block group-hover:translate-x-1 transition-transform">🚀</span>
           </button>
 
           <button
             onClick={onHistory}
-            className="w-full py-4 rounded-2xl font-bold text-white/60 hover:text-white hover:bg-white/5 transition-all text-sm uppercase tracking-widest border border-white/5 cursor-pointer"
+            className="w-full py-4 rounded-2xl font-bold text-white/60 hover:text-white hover:bg-white/5 transition-all text-sm uppercase tracking-widest border border-white/5 cursor-pointer mt-1"
           >
             📜 Ver Historial Clínico
           </button>
@@ -361,6 +376,7 @@ function StepHistory({ onBack, onOpenReport, onOpenEvolution, patients, deletePa
 
 export default function ReactionGameView({ onExit, onGameReady }) {
   const [step, setStep] = useState('menu');
+  const [isWarmupMode, setIsWarmupMode] = useState(false);
   
   const {
     patients,
@@ -413,7 +429,13 @@ export default function ReactionGameView({ onExit, onGameReady }) {
 
       {step === 'menu' && (
         <StepMenu 
-          onNext={() => {
+          onStartWarmup={() => {
+            setIsWarmupMode(true);
+            setSessionStartTime(Date.now());
+            setStep('countdown');
+          }}
+          onStartOfficial={() => {
+            setIsWarmupMode(false);
             setSessionStartTime(Date.now());
             setStep('tutorial');
           }} 
@@ -492,6 +514,7 @@ export default function ReactionGameView({ onExit, onGameReady }) {
           getPatient={getPatient}
           sessionMeta={sessionMeta}
           sessionStartTime={sessionStartTime}
+          isWarmup={isWarmupMode}
         />
       )}
 
