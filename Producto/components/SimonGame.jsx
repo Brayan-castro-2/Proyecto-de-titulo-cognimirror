@@ -51,6 +51,9 @@ const playTone = (frequency, type = 'triangle', duration = 0.4) => {
 export default function SimonGame({ onExit, playerName, sessionMeta, sessionStartTime }) {
   const { isConnected, subscribeToMoves, openScanner } = useBluetoothCube();
 
+  const wasConnectedAtStartRef = useRef(isConnected);
+  const requireBluetooth = wasConnectedAtStartRef.current;
+
   const { 
     gameState, 
     level, 
@@ -63,7 +66,7 @@ export default function SimonGame({ onExit, playerName, sessionMeta, sessionStar
     telemetry, 
     startGame, 
     handleCubeInput 
-  } = useVisuospatialTest(isConnected);
+  } = useVisuospatialTest(isConnected, requireBluetooth);
 
   const [demoKey, setDemoKey] = useState(0);
   const [showErrorFlash, setShowErrorFlash] = useState(false);
@@ -171,7 +174,7 @@ export default function SimonGame({ onExit, playerName, sessionMeta, sessionStar
   const activeMeta = FACE_METADATA[activeFace];
 
   const isGameActive = gameState !== 'idle' && gameState !== 'finished';
-  const showDisconnectOverlay = !isConnected && isGameActive;
+  const showDisconnectOverlay = requireBluetooth && !isConnected && isGameActive;
 
   if (showDisconnectOverlay) {
     return (

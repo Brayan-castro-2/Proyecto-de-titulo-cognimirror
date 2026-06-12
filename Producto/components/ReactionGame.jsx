@@ -30,8 +30,8 @@ function generateDeck() {
       if (counts.L > 0) available.push('L');
       if (counts.NOGO > 0) available.push('NOGO');
 
-      // Regla de Orden: Los primeros 3 deben ser SIEMPRE GO (Respuesta Prepotente)
-      if (i < 3) {
+      // Regla de Orden: Los primeros 4 deben ser SIEMPRE GO (Respuesta Prepotente / Arranque Ciego)
+      if (i < 4) {
         available = available.filter(t => t !== 'NOGO');
       }
 
@@ -40,8 +40,8 @@ function generateDeck() {
         available = available.filter(t => t !== 'NOGO');
       }
 
-      // Regla Clínica: PROHIBIDO DOS FALSOS SEGUIDOS
-      if (i > 0 && attempt[i - 1] === 'NOGO') {
+      // Regla Clínica: Distancia mínima de 2 estímulos GO entre NOGOs (Prohibido juntar trampas)
+      if (i > 0 && (attempt[i - 1] === 'NOGO' || (i > 1 && attempt[i - 2] === 'NOGO'))) {
         available = available.filter(t => t !== 'NOGO');
       }
 
@@ -79,6 +79,9 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
   const { subscribeToMoves, isConnected, openScanner } = useBluetoothCube();
   const { cubeRotation: globalRotation } = useCubeState();
   const { deactivate: deactivateJoicube } = useJoicube();
+
+  const wasConnectedAtStartRef = useRef(isConnected);
+  const requireBluetooth = wasConnectedAtStartRef.current;
 
   // --- WARMUP TIMER ---
   const [warmupTimeLeft, setWarmupTimeLeft] = useState(15);
@@ -133,18 +136,18 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
 
   // --- PAUSA POR DESCONEXIÓN BLE ---
   useEffect(() => {
-    if (!isConnected && stage !== 'finished' && stage !== 'rules' && round < deck.length) {
+    if (requireBluetooth && !isConnected && stage !== 'finished' && stage !== 'rules' && round < deck.length) {
       if (nogoTimeoutRef.current) clearTimeout(nogoTimeoutRef.current);
       if (goTimeoutRef.current) clearTimeout(goTimeoutRef.current);
       setStage('waiting');
       stageRef.current = 'waiting';
       setFlash(null);
     }
-  }, [isConnected, stage, round, deck?.length]);
+  }, [isConnected, stage, round, deck?.length, requireBluetooth]);
 
   // ── CICLO DEL JUEGO ──
   useEffect(() => {
-    if (!isConnected) return; // Si no hay conexión, pausar programación de estímulos
+    if (requireBluetooth && !isConnected) return; // Si no hay conexión, pausar programación de estímulos
 
     if (stage === 'waiting' && round < deck.length) {
       // Ritmo Inter-Estímulo (ISI): Aleatorio estricto para crear 'Arousal' (400ms - 800ms)
@@ -228,7 +231,7 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
     }
   }, [stage, round, deck, isConnected]);
   
-  const persistData = () => {
+  const persistData = async () => {
     const goResults = results.filter(r => r.type === 'GO' && !r.timeout);
     const timeTotal = goResults.reduce((acc, r) => acc + r.time, 0) || 0;
     const gameDuration = gameStartTimeRef.current ? Math.round(performance.now() - gameStartTimeRef.current) : 0;
@@ -268,7 +271,7 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
       rawTurnsData: results
     };
 
-    const savedSession = addSession(activePatientId, sessionData);
+    const savedSession = await addSession(activePatientId, sessionData);
     const patientObj = getPatient(activePatientId);
 
     if (onExit) onExit(savedSession, patientObj);
@@ -392,7 +395,7 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
   // ── RENDER ──
   // --- PAUSA POR DESCONEXIÓN ---
   const isGameActive = stage !== 'finished' && stage !== 'rules' && round < deck.length;
-  const showDisconnectOverlay = !isConnected && isGameActive;
+  const showDisconnectOverlay = requireBluetooth && !isConnected && isGameActive;
 
   if (showDisconnectOverlay) {
     return (
