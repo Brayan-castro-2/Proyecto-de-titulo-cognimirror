@@ -33,6 +33,7 @@ export function usePatientsDB() {
       let mapPatients = pacientesData.map(p => ({
         id: p.id,
         name: `${p.nombre} ${p.apellido}`.trim(),
+        idSujeto: p.id_sujeto,
         createdAt: p.creado_en,
         sessions: sesionesData
           .filter(s => s.id_paciente === p.id)
@@ -77,6 +78,9 @@ export function usePatientsDB() {
               testType: s.tipo_test,
               attemptNumber: s.intento_numero,
               clinicalLabel: s.etiqueta_clinica,
+              etiquetaEstudio: s.etiqueta_estudio,
+              idSujeto: s.id_sujeto,
+              intentoValido: s.intento_valido !== false,
               date: s.fecha_sesion,
               stats: s.estadisticas_json,
               rawTurnsData: rawTurns
@@ -172,7 +176,7 @@ export function usePatientsDB() {
     fetchPatients();
   }, [fetchPatients]);
 
-  const createPatient = useCallback(async (name) => {
+  const createPatient = useCallback(async (name, idSujeto = null) => {
     try {
       const partes = name.trim().split(' ');
       const nombre = partes[0];
@@ -180,7 +184,7 @@ export function usePatientsDB() {
 
       const { data, error } = await supabase
         .from('pacientes')
-        .insert([{ nombre, apellido }])
+        .insert([{ nombre, apellido, id_sujeto: idSujeto }])
         .select()
         .single();
 
@@ -189,6 +193,7 @@ export function usePatientsDB() {
       const newPatient = {
         id: data.id,
         name: `${data.nombre} ${data.apellido}`.trim(),
+        idSujeto: data.id_sujeto,
         createdAt: data.creado_en,
         sessions: []
       };
@@ -211,10 +216,12 @@ export function usePatientsDB() {
       const testTypeSessions = patient.sessions.filter(s => (s.testType || 'reaction') === testType);
       const attemptNumber = testTypeSessions.length + 1;
       
-      let label = 'Seguimiento';
-      if (attemptNumber === 1) label = 'Ensayo / Familiarización';
-      else if (attemptNumber === 2) label = 'Línea Base';
-      else label = 'Evaluación de Seguimiento';
+      let label = sessionData.clinicalLabel;
+      if (!label) {
+        if (attemptNumber === 1) label = 'Ensayo / Familiarización';
+        else if (attemptNumber === 2) label = 'Línea Base';
+        else label = 'Evaluación de Seguimiento';
+      }
 
       const telemetryData = sessionData.telemetry || sessionData.rawTurnsData || [];
       const statsPayload = {
@@ -229,7 +236,10 @@ export function usePatientsDB() {
           tipo_test: testType,
           intento_numero: attemptNumber,
           etiqueta_clinica: label,
-          estadisticas_json: statsPayload
+          estadisticas_json: statsPayload,
+          etiqueta_estudio: sessionData.etiquetaEstudio || sessionData.etiqueta_estudio || null,
+          id_sujeto: sessionData.idSujeto || sessionData.id_sujeto || null,
+          intento_valido: sessionData.intentoValido !== undefined ? sessionData.intentoValido : true
         }])
         .select()
         .single();
@@ -241,6 +251,9 @@ export function usePatientsDB() {
         testType,
         attemptNumber,
         clinicalLabel: label,
+        etiquetaEstudio: sessionInfo.etiqueta_estudio,
+        idSujeto: sessionInfo.id_sujeto,
+        intentoValido: sessionInfo.intento_valido,
         date: sessionInfo.fecha_sesion,
         stats: sessionInfo.estadisticas_json,
         rawTurnsData: telemetryData

@@ -12,16 +12,23 @@ export default function PatientDirectory() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newPatientName, setNewPatientName] = useState('');
+  const [newPatientIdSujeto, setNewPatientIdSujeto] = useState('');
 
-  const filteredPatients = patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredPatients = patients.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (p.idSujeto && p.idSujeto.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
-  const handleAddPatient = (e) => {
+  const handleAddPatient = async (e) => {
     e.preventDefault();
     if (!newPatientName.trim()) return;
-    const p = createPatient(newPatientName);
+    const p = await createPatient(newPatientName, newPatientIdSujeto.trim() || null);
     setNewPatientName('');
+    setNewPatientIdSujeto('');
     setShowAddModal(false);
-    router.push(`/patients/${p.id}`);
+    if (p && p.id) {
+      router.push(`/patients/${p.id}`);
+    }
   };
 
   return (
@@ -100,10 +107,29 @@ export default function PatientDirectory() {
                         {patient.name.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold tracking-tight text-white mb-1 group-hover:text-blue-100 transition-colors">{patient.name}</h3>
-                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-slate-500 font-mono">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-xl font-bold tracking-tight text-white group-hover:text-blue-100 transition-colors">{patient.name}</h3>
+                          {patient.idSujeto && (
+                            <span className="px-2 py-0.5 bg-blue-500/15 border border-blue-500/30 text-blue-400 text-[10px] font-black rounded-md tracking-wider uppercase font-mono">
+                              {patient.idSujeto}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-slate-500 font-mono mt-1">
                           <Calendar size={10} />
                           {new Date(patient.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric' })}
+                        </div>
+                        <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(patient.id);
+                            alert(`UUID de ${patient.name} copiado al portapapeles!`);
+                          }}
+                          className="mt-2 text-[10px] font-mono text-slate-500 hover:text-blue-400 hover:border-blue-500/20 transition-all flex items-center gap-1 cursor-pointer bg-white/[0.02] border border-white/10 px-2 py-1 rounded-md"
+                          title="Click para copiar UUID"
+                        >
+                          <span>UUID: {patient.id}</span>
+                          <span>📋</span>
                         </div>
                       </div>
                     </div>
@@ -141,15 +167,26 @@ export default function PatientDirectory() {
               </div>
               
               <form onSubmit={handleAddPatient}>
-                <div className="mb-8">
+                <div className="mb-6">
+                  <label className="block text-[10px] uppercase font-bold tracking-widest text-slate-500 mb-2">Nombre Completo</label>
                   <input 
                     type="text" 
                     value={newPatientName}
                     onChange={(e) => setNewPatientName(e.target.value)}
-                    placeholder="Nombre completo..."
-                    className="w-full bg-transparent border-b-2 border-white/10 py-3 text-xl font-medium text-white focus:outline-none focus:border-blue-500 transition-colors placeholder:text-white/20"
+                    placeholder="Ej: Juan Pérez"
+                    className="w-full bg-white/[0.02] border border-white/10 px-4 py-3 text-lg font-medium text-white focus:outline-none focus:border-blue-500 transition-colors placeholder:text-white/20"
                     autoFocus
                     required
+                  />
+                </div>
+                <div className="mb-8">
+                  <label className="block text-[10px] uppercase font-bold tracking-widest text-slate-500 mb-2">ID Sujeto (Estudio / Excel)</label>
+                  <input 
+                    type="text" 
+                    value={newPatientIdSujeto}
+                    onChange={(e) => setNewPatientIdSujeto(e.target.value)}
+                    placeholder="Ej: S-01 (Opcional)"
+                    className="w-full bg-white/[0.02] border border-white/10 px-4 py-3 text-lg font-mono text-white focus:outline-none focus:border-blue-500 transition-colors placeholder:text-white/20"
                   />
                 </div>
                 <div className="flex gap-4 justify-end">

@@ -82,9 +82,9 @@ function StepMenu({ onNext, onHistory, activePatient, setActivePatientId, patien
         <PatientSelector 
           patients={patients}
           onSelect={setActivePatientId}
-          onCreate={(name) => {
-            const newP = createPatient(name);
-            setActivePatientId(newP.id);
+          onCreate={async (name) => {
+            const newP = await createPatient(name);
+            if (newP && newP.id) setActivePatientId(newP.id);
           }}
         />
 
@@ -243,8 +243,9 @@ function StepHistory({ onBack, onOpenReport, patients, deletePatient, deleteSess
   );
 }
 
-export default function MemoryGameView({ onExit }) {
+export default function MemoryGameView({ onExit, subjectId, etiquetaEstudio, isWarmupUrl = false }) {
   const [step, setStep] = useState('menu');
+  const [isWarmupMode, setIsWarmupMode] = useState(false);
   
   const {
     patients,
@@ -262,6 +263,46 @@ export default function MemoryGameView({ onExit }) {
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [sessionMeta, setSessionMeta] = useState(null);
   const [sessionStartTime, setSessionStartTime] = useState(null);
+
+  // Efecto de Auto-onboarding para el Modo Evaluador
+  useEffect(() => {
+    if (!subjectId || patients.length === 0) return;
+
+    const autoOnboarding = async () => {
+      // Evitar bucle si ya está seleccionado
+      const currentPatient = getPatient(activePatientId);
+      if (currentPatient && currentPatient.idSujeto === subjectId) return;
+
+      // Buscar si el paciente ya existe por su idSujeto
+      let p = patients.find(x => x.idSujeto === subjectId);
+      
+      if (!p) {
+        // Intentar buscarlo por nombre por si acaso
+        p = patients.find(x => x.name.trim().toLowerCase() === `sujeto ${subjectId}`.toLowerCase());
+      }
+
+      if (!p) {
+        console.log(`[Evaluador] Creando nuevo perfil para sujeto: ${subjectId}`);
+        p = await createPatient(`Sujeto ${subjectId}`, subjectId);
+      }
+
+      if (p && p.id) {
+        setActivePatientId(p.id);
+        setIsWarmupMode(isWarmupUrl);
+        setSessionStartTime(Date.now());
+        setSessionMeta({
+          fatiga: 'No',
+          sueno: 'Bueno',
+          horasSueno: '8',
+          medicamentos: 'No',
+          observaciones: isWarmupUrl ? 'Sesión de práctica clínica' : 'Evaluación rápida de estudio'
+        });
+        setStep('countdown');
+      }
+    };
+
+    autoOnboarding();
+  }, [subjectId, patients, activePatientId, getPatient, createPatient, setActivePatientId, isWarmupUrl]);
 
   // Seguridad Modo Kiosco
   const [isPasscodeOpen, setIsPasscodeOpen] = useState(false);
@@ -348,19 +389,31 @@ export default function MemoryGameView({ onExit }) {
           onExit={(record) => { 
             if (record) {
               const enrichedRecord = { ...record, playerName: activePatient?.name };
-              // Guardar la sesión automáticamente
-              addSession(activePatientId, {
-                testType: 'memory',
-                attemptNumber: sessionMeta?.attemptNumber || 1,
-                clinicalLabel: sessionMeta?.clinicalLabel || 'Línea Base',
-                stats: record.metrics,
-                telemetry: record.telemetry,
-                date: new Date().toISOString()
-              });
+              
+              if (!isWarmupMode) {
+                // Guardar la sesión automáticamente con soporte de estudio y sujeto
+                addSession(activePatientId, {
+                  testType: 'memory',
+                  attemptNumber: sessionMeta?.attemptNumber || 1,
+                  clinicalLabel: etiquetaEstudio ? 'Evaluación Oficial' : (sessionMeta?.clinicalLabel || 'Línea Base'),
+                  etiquetaEstudio: etiquetaEstudio,
+                  idSujeto: subjectId || (activePatient?.idSujeto || null),
+                  stats: record.metrics,
+                  telemetry: record.telemetry,
+                  date: new Date().toISOString()
+                });
+              } else {
+                console.log('[Práctica] Sesión de práctica finalizada. No se guarda en Supabase.');
+              }
+
               setSelectedRecord(enrichedRecord);
               setStep('view_report');
             } else {
-              setStep('menu'); 
+              if (subjectId) {
+                window.location.href = `/evaluador?subjectId=${subjectId}`;
+              } else {
+                setStep('menu'); 
+              }
               setSessionMeta(null);
             }
           }}

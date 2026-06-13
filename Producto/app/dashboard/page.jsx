@@ -282,6 +282,7 @@ export default function ClassicDashboard() {
             <Link href="/patients" className="cube-btn" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text)', borderColor: 'rgba(255,255,255,0.1)' }}>👥 Pacientes</Link>
             <Link href="/reaction-game" className="cube-btn" style={{ background: 'rgba(37,99,235,0.1)', color: 'var(--accent)' }}>⚡ Reaction Mirror</Link>
             <Link href="/simon-game" className="cube-btn" style={{ background: 'rgba(168,85,247,0.1)', color: '#c084fc', borderColor: 'rgba(168,85,247,0.3)' }}>🧬 Memory Mirror</Link>
+            <Link href="/evaluador" className="cube-btn" style={{ background: 'rgba(99,102,241,0.1)', color: '#818cf8', borderColor: 'rgba(99,102,241,0.3)', fontWeight: 700 }}>⚙️ Evaluador</Link>
             <div className="ble-badge" onClick={connectBLE}>
               <div className={`ble-dot ${isConnected ? 'ok' : ''}`} />
               <span>{isConnected ? device : 'Conectar'}</span>

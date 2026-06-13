@@ -75,7 +75,7 @@ function generateDeck() {
   });
 }
 
-export default function ReactionGame({ onExit, activePatientId, addSession, getPatient, sessionMeta, sessionStartTime, isWarmup = false }) {
+export default function ReactionGame({ onExit, activePatientId, addSession, getPatient, sessionMeta, sessionStartTime, isWarmup = false, etiquetaEstudio = null, idSujeto = null }) {
   const { subscribeToMoves, isConnected, openScanner } = useBluetoothCube();
   const { cubeRotation: globalRotation } = useCubeState();
   const { deactivate: deactivateJoicube } = useJoicube();
@@ -255,6 +255,9 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
       testType: 'reaction',
       date: new Date().toISOString(),
       sessionMeta,
+      clinicalLabel: isWarmup ? 'Calentamiento' : (etiquetaEstudio ? 'Evaluación Oficial' : null),
+      etiquetaEstudio: etiquetaEstudio,
+      idSujeto: idSujeto || (getPatient(activePatientId)?.idSujeto || null),
       metrics: { 
         tiempo_total: Math.round(timeTotal),
         aciertos_rojo: aciertosRojo,
@@ -271,7 +274,20 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
       rawTurnsData: results
     };
 
-    const savedSession = await addSession(activePatientId, sessionData);
+    let savedSession = null;
+    if (!isWarmup) {
+      savedSession = await addSession(activePatientId, sessionData);
+    } else {
+      savedSession = {
+        sessionId: 'warmup-' + Date.now(),
+        testType: 'reaction',
+        attemptNumber: 0,
+        clinicalLabel: 'Calentamiento (Práctica)',
+        date: new Date().toISOString(),
+        stats: sessionData.metrics,
+        rawTurnsData: sessionData.rawTurnsData
+      };
+    }
     const patientObj = getPatient(activePatientId);
 
     if (onExit) onExit(savedSession, patientObj);

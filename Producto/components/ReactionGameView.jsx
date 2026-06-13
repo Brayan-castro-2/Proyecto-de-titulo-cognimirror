@@ -194,9 +194,9 @@ function StepMenu({ onStartWarmup, onStartOfficial, onHistory, activePatient, se
         <PatientSelector 
           patients={patients}
           onSelect={setActivePatientId}
-          onCreate={(name) => {
-            const newP = createPatient(name);
-            setActivePatientId(newP.id);
+          onCreate={async (name) => {
+            const newP = await createPatient(name);
+            if (newP && newP.id) setActivePatientId(newP.id);
           }}
         />
 
@@ -374,7 +374,7 @@ function StepHistory({ onBack, onOpenReport, onOpenEvolution, patients, deletePa
   );
 }
 
-export default function ReactionGameView({ onExit, onGameReady }) {
+export default function ReactionGameView({ onExit, onGameReady, subjectId, etiquetaEstudio, isWarmupUrl = false }) {
   const [step, setStep] = useState('menu');
   const [isWarmupMode, setIsWarmupMode] = useState(false);
   
@@ -395,6 +395,46 @@ export default function ReactionGameView({ onExit, onGameReady }) {
   const [selectedEvolutionPatient, setSelectedEvolutionPatient] = useState(null);
   const [sessionMeta, setSessionMeta] = useState(null);
   const [sessionStartTime, setSessionStartTime] = useState(null);
+
+  // Efecto de Auto-onboarding para el Modo Evaluador
+  useEffect(() => {
+    if (!subjectId || patients.length === 0) return;
+
+    const autoOnboarding = async () => {
+      // Evitar bucle si ya está seleccionado
+      const currentPatient = getPatient(activePatientId);
+      if (currentPatient && currentPatient.idSujeto === subjectId) return;
+
+      // Buscar si el paciente ya existe por su idSujeto
+      let p = patients.find(x => x.idSujeto === subjectId);
+      
+      if (!p) {
+        // Intentar buscarlo por nombre por si acaso
+        p = patients.find(x => x.name.trim().toLowerCase() === `sujeto ${subjectId}`.toLowerCase());
+      }
+
+      if (!p) {
+        console.log(`[Evaluador] Creando nuevo perfil para sujeto: ${subjectId}`);
+        p = await createPatient(`Sujeto ${subjectId}`, subjectId);
+      }
+
+      if (p && p.id) {
+        setActivePatientId(p.id);
+        setIsWarmupMode(isWarmupUrl);
+        setSessionStartTime(Date.now());
+        setSessionMeta({
+          fatiga: 'No',
+          sueno: 'Bueno',
+          horasSueno: '8',
+          medicamentos: 'No',
+          observaciones: isWarmupUrl ? 'Sesión de práctica clínica' : 'Evaluación rápida de estudio'
+        });
+        setStep('countdown');
+      }
+    };
+
+    autoOnboarding();
+  }, [subjectId, patients, activePatientId, getPatient, createPatient, setActivePatientId, isWarmupUrl]);
 
   // Seguridad Modo Kiosco
   const [isPasscodeOpen, setIsPasscodeOpen] = useState(false);
@@ -505,7 +545,13 @@ export default function ReactionGameView({ onExit, onGameReady }) {
               setSelectedRecord({ ...savedSession, playerName: activePatient.name, patient: patientObj });
               setStep('view_report');
             } else {
-              setStep('menu'); 
+              // Si estamos en modo evaluador (hay subjectId), al salir vamos al menú de evaluador, de lo contrario al menú normal
+              if (subjectId) {
+                // Redirigir a la vista de evaluador directamente o a menu
+                window.location.href = `/evaluador?subjectId=${subjectId}`;
+              } else {
+                setStep('menu'); 
+              }
               setSessionMeta(null);
             }
           }}
@@ -515,6 +561,8 @@ export default function ReactionGameView({ onExit, onGameReady }) {
           sessionMeta={sessionMeta}
           sessionStartTime={sessionStartTime}
           isWarmup={isWarmupMode}
+          etiquetaEstudio={etiquetaEstudio}
+          idSujeto={subjectId}
         />
       )}
 
