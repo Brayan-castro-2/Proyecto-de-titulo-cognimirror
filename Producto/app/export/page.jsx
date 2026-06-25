@@ -22,6 +22,7 @@ export default function ExportCenter() {
     invalidateRemoteEvaluation 
   } = usePatientsDB();
   const { signOut } = useAuth();
+  const [savedSessionId, setSavedSessionId] = useState(null);
 
   // Tab State
   const [activeTab, setActiveTab] = useState('exports');
@@ -133,6 +134,11 @@ export default function ExportCenter() {
       setLiveTelemetry(event.payload);
     });
 
+    channel.on('broadcast', { event: 'finished_session' }, (event) => {
+      console.log('[Realtime Docente] Sesión finalizada recibida:', event.payload);
+      setSavedSessionId(event.payload.sessionId);
+    });
+
     channel.subscribe((status, err) => {
       console.log(`[Realtime Docente] Canal status: ${status}`, err || '');
       if (status === 'SUBSCRIBED') {
@@ -150,6 +156,7 @@ export default function ExportCenter() {
       setPatientDevice('');
       setLiveTelemetry(null);
       setTwinMove(null);
+      setSavedSessionId(null);
     };
   }, [activeControlEval]);
 
@@ -1272,8 +1279,8 @@ export default function ExportCenter() {
               </div>
 
               {/* COL 2: LIVE TELEMETRY */}
-              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 flex flex-col justify-between">
-                <div>
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 flex flex-col justify-between max-h-[460px] min-h-[380px]">
+                <div className="flex flex-col min-h-0 flex-1">
                   <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-4">Telemetría en Vivo</h3>
                   
                   {!liveTelemetry ? (
@@ -1281,56 +1288,110 @@ export default function ExportCenter() {
                       Esperando inicio de prueba por parte del alumno...
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      {liveTelemetry.results ? (
-                        // Telemetría Reaction Mirror
-                        <>
-                          <div className="flex justify-between items-center py-1 border-b border-white/5">
-                            <span className="text-xs text-slate-400 font-medium">Ronda:</span>
-                            <span className="text-sm font-bold text-white">{liveTelemetry.round} / 40</span>
-                          </div>
-                          <div className="flex justify-between items-center py-1 border-b border-white/5">
-                            <span className="text-xs text-slate-400 font-medium">Aciertos:</span>
-                            <span className="text-sm font-bold text-green-400">
-                              {liveTelemetry.results.filter(r => r.status === 'Ok' || r.status === 'Corregido' || !r.fail).length}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center py-1 border-b border-white/5">
-                            <span className="text-xs text-slate-400 font-medium">Fallas:</span>
-                            <span className="text-sm font-bold text-red-400">
-                              {liveTelemetry.results.filter(r => r.fail || r.status === 'Fallo de Inhibición' || r.status === 'Error').length}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center py-1">
-                            <span className="text-xs text-slate-400 font-medium">Estado Local:</span>
-                            <span className="text-xs font-bold uppercase text-blue-400">{liveTelemetry.stage}</span>
-                          </div>
-                        </>
-                      ) : (
-                        // Telemetría Memory Mirror
-                        <>
-                          <div className="flex justify-between items-center py-1 border-b border-white/5">
-                            <span className="text-xs text-slate-400 font-medium">Nivel:</span>
-                            <span className="text-sm font-bold text-white">{liveTelemetry.level}</span>
-                          </div>
-                          <div className="flex justify-between items-center py-1 border-b border-white/5">
-                            <span className="text-xs text-slate-400 font-medium">Intento:</span>
-                            <span className="text-sm font-bold text-white">{liveTelemetry.trial}</span>
-                          </div>
-                          <div className="flex justify-between items-center py-1 border-b border-white/5">
-                            <span className="text-xs text-slate-400 font-medium">Movimientos:</span>
-                            <span className="text-sm font-bold text-white">{(liveTelemetry.telemetry || []).length}</span>
-                          </div>
-                          <div className="flex justify-between items-center py-1">
-                            <span className="text-xs text-slate-400 font-medium">Estado Local:</span>
-                            <span className="text-xs font-bold uppercase text-purple-400">{liveTelemetry.gameState}</span>
-                          </div>
-                        </>
-                      )}
+                    <div className="space-y-4 flex-1 flex flex-col min-h-0">
+                      <div className="space-y-2 flex-shrink-0">
+                        {liveTelemetry.results ? (
+                          // Telemetría Reaction Mirror
+                          <>
+                            <div className="flex justify-between items-center py-1 border-b border-white/5">
+                              <span className="text-xs text-slate-400 font-medium">Ronda:</span>
+                              <span className="text-sm font-bold text-white">{liveTelemetry.round} / 40</span>
+                            </div>
+                            <div className="flex justify-between items-center py-1 border-b border-white/5">
+                              <span className="text-xs text-slate-400 font-medium">Aciertos:</span>
+                              <span className="text-sm font-bold text-green-400">
+                                {liveTelemetry.results.filter(r => r.status === 'Ok' || r.status === 'Corregido' || !r.fail).length}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center py-1 border-b border-white/5">
+                              <span className="text-xs text-slate-400 font-medium">Fallas:</span>
+                              <span className="text-sm font-bold text-red-400">
+                                {liveTelemetry.results.filter(r => r.fail || r.status === 'Fallo de Inhibición' || r.status === 'Error').length}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center py-1">
+                              <span className="text-xs text-slate-400 font-medium">Estado Local:</span>
+                              <span className="text-xs font-bold uppercase text-blue-400">{liveTelemetry.stage}</span>
+                            </div>
+                          </>
+                        ) : (
+                          // Telemetría Memory Mirror
+                          <>
+                            <div className="flex justify-between items-center py-1 border-b border-white/5">
+                              <span className="text-xs text-slate-400 font-medium">Nivel:</span>
+                              <span className="text-sm font-bold text-white">{liveTelemetry.level}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-1 border-b border-white/5">
+                              <span className="text-xs text-slate-400 font-medium">Intento:</span>
+                              <span className="text-sm font-bold text-white">{liveTelemetry.trial}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-1 border-b border-white/5">
+                              <span className="text-xs text-slate-400 font-medium">Movimientos:</span>
+                              <span className="text-sm font-bold text-white">{(liveTelemetry.telemetry || []).length}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-1">
+                              <span className="text-xs text-slate-400 font-medium">Estado Local:</span>
+                              <span className="text-xs font-bold uppercase text-purple-400">{liveTelemetry.gameState}</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Radiografía en tiempo real */}
+                      <div className="border-t border-white/10 pt-3 mt-2 flex-1 flex flex-col min-h-0">
+                        <h4 className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-2">Radiografía del Test</h4>
+                        <div className="flex-1 overflow-y-auto max-h-[140px] bg-black/40 border border-white/5 rounded-lg p-2 font-mono text-[9px] space-y-1 scrollbar-thin">
+                          {liveTelemetry.results ? (
+                            liveTelemetry.results.length === 0 ? (
+                              <div className="text-center text-slate-600 py-3 italic">Esperando ensayos...</div>
+                            ) : (
+                              liveTelemetry.results.slice().reverse().map((res, idx) => {
+                                const isSuccess = res.status === 'Ok' || res.status === 'Corregido' || !res.fail;
+                                return (
+                                  <div key={idx} className="flex justify-between items-center bg-white/[0.01] border border-white/5 px-2 py-0.5 rounded">
+                                    <span className="text-slate-500">R{res.round || (liveTelemetry.results.length - idx)}:</span>
+                                    <span className={`font-bold ${isSuccess ? 'text-green-400' : 'text-red-400'}`}>
+                                      {res.status || (isSuccess ? 'Ok' : 'Error')}
+                                    </span>
+                                    <span className="text-slate-400">{res.time ? `${res.time} ms` : '—'}</span>
+                                  </div>
+                                );
+                              })
+                            )
+                          ) : (
+                            (!liveTelemetry.telemetry || liveTelemetry.telemetry.length === 0) ? (
+                              <div className="text-center text-slate-600 py-3 italic">Esperando giros...</div>
+                            ) : (
+                              liveTelemetry.telemetry.slice().reverse().map((move, idx) => (
+                                <div key={idx} className="flex justify-between items-center bg-white/[0.01] border border-white/5 px-2 py-0.5 rounded">
+                                  <span className="text-slate-500">Niv {move.level} (Int {move.trial}):</span>
+                                  <span className="text-cyan-400 font-bold">Giro: {move.face}</span>
+                                  <span className={move.isCorrect ? 'text-green-400' : 'text-red-400'}>
+                                    {move.isCorrect ? '✓' : '✗'}
+                                  </span>
+                                  <span className="text-slate-400">{move.latencyMs} ms</span>
+                                </div>
+                              ))
+                            )
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
-                <div className="text-[10px] text-slate-500 leading-relaxed border-t border-white/5 pt-3 mt-4">
+                
+                {/* Botón de Informe cuando termina */}
+                {((liveTelemetry && (liveTelemetry.stage === 'finished' || liveTelemetry.gameState === 'finished')) || savedSessionId) && (
+                  <Link
+                    href={`/patients/${activeControlEval.id_paciente}`}
+                    onClick={() => setActiveControlEval(null)}
+                    className="w-full text-center py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hover:brightness-110 text-black font-black text-xs uppercase tracking-wider rounded transition-all active:scale-[0.98] mt-4 flex items-center justify-center gap-1.5 shadow-lg shadow-green-500/10"
+                  >
+                    📊 Ver Ficha e Informe Clínico
+                  </Link>
+                )}
+                
+                <div className="text-[9px] text-slate-500 leading-relaxed border-t border-white/5 pt-2 mt-3 flex-shrink-0">
                   Los datos finales se guardarán de forma permanente una vez que el alumno complete el test.
                 </div>
               </div>

@@ -176,7 +176,15 @@ function RemoteEvalContent() {
       channelRef.current = null;
       isSubscribedRef.current = false;
     };
-  }, [token, isConnected]);
+  }, [token]);
+
+  // Actualizar presencia al conectar/desconectar el cubo por BLE
+  useEffect(() => {
+    if (channelRef.current && isSubscribedRef.current) {
+      channelRef.current.track({ online: true, device: isConnected ? 'Cubo BLE' : 'Teclado' });
+      console.log('[Realtime Alumno] Presence track actualizado para dispositivo:', isConnected ? 'Cubo BLE' : 'Teclado');
+    }
+  }, [isConnected]);
 
   // Realtime broadcast for gyro and BLE moves
   useEffect(() => {
@@ -220,8 +228,18 @@ function RemoteEvalContent() {
   };
 
   // Complete Remote Session and Revoke Token
-  const handleFinishRemoteTest = async (testType, stats, telemetry) => {
+  const handleFinishRemoteTest = async (testType, stats, telemetry, savedSessionId = null) => {
     try {
+      console.log('[Realtime Alumno] Finalizando test. Sesión guardada ID:', savedSessionId);
+      if (channelRef.current && isSubscribedRef.current && savedSessionId) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'finished_session',
+          payload: { sessionId: savedSessionId }
+        });
+        console.log('[Realtime Alumno] Evento finished_session enviado');
+      }
+
       // 1. Invalidate Token in DB
       await supabase
         .from('evaluaciones_remotas')
@@ -408,7 +426,7 @@ function RemoteEvalContent() {
               idSujeto={patientData.id_sujeto}
               onExit={async (savedSession) => {
                 if (savedSession) {
-                  await handleFinishRemoteTest('reaction', savedSession.stats, savedSession.rawTurnsData);
+                  await handleFinishRemoteTest('reaction', savedSession.stats, savedSession.rawTurnsData, savedSession.id);
                 } else {
                   setStep('welcome');
                 }
@@ -424,7 +442,7 @@ function RemoteEvalContent() {
               onExit={async (record) => {
                 if (record) {
                   // Save memory session clinical data
-                  await addSession(patientData.id, {
+                  const saved = await addSession(patientData.id, {
                     testType: 'memory',
                     attemptNumber: 1,
                     clinicalLabel: 'Evaluación Remota',
@@ -434,7 +452,7 @@ function RemoteEvalContent() {
                     telemetry: record.telemetry,
                     date: new Date().toISOString()
                   });
-                  await handleFinishRemoteTest('memory', record.metrics, record.telemetry);
+                  await handleFinishRemoteTest('memory', record.metrics, record.telemetry, saved?.id);
                 } else {
                   setStep('welcome');
                 }
