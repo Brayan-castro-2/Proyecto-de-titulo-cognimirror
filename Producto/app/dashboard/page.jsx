@@ -326,7 +326,7 @@ export default function ClassicDashboard() {
             <nav className="sidebar-menu">
               <Link href="/reaction-game" className="sidebar-link">⚡ Reaction Mirror (Local)</Link>
               <Link href="/simon-game" className="sidebar-link">🧬 Memory Mirror (Local)</Link>
-              <a href="/remote-eval?token=demo-token" target="_blank" className="sidebar-link">🌐 Evaluación Remota (Demo)</a>
+              <Link href="/export?tab=remote" className="sidebar-link">🌐 Evaluación Remota</Link>
             </nav>
           </div>
 

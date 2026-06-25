@@ -26,6 +26,16 @@ export default function ExportCenter() {
   // Tab State
   const [activeTab, setActiveTab] = useState('exports');
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      if (tab === 'remote') {
+        setActiveTab('remote');
+      }
+    }
+  }, []);
+
   // Filter States
   const [selectedPatientId, setSelectedPatientId] = useState('all');
   const [selectedTestType, setSelectedTestType] = useState('all');
