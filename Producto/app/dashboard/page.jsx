@@ -24,11 +24,22 @@ export default function ClassicDashboard() {
   const { user, signOut } = useAuth();
 
   const [activeTab, setActiveTab] = useState('session');
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [isOfflineNetwork, setIsOfflineNetwork] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setIsOfflineMode(!!localStorage.getItem('cognimirror_bypass_session'));
+      setIsOfflineNetwork(!navigator.onLine);
+
+      const handleOnline = () => setIsOfflineNetwork(false);
+      const handleOffline = () => setIsOfflineNetwork(true);
+
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+
+      return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      };
     }
   }, []);
   // Lógica de stats vive en refs para performance
@@ -289,14 +300,14 @@ export default function ClassicDashboard() {
             <div className="sidebar-user">
               <div className="sidebar-user-name">Ps. {user.user_metadata?.full_name || 'Especialista'}</div>
               <div className="sidebar-user-role">Sesión Clínica Activa</div>
-              {isOfflineMode && (
+              {isOfflineNetwork && (
                 <div style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '4px',
-                  background: 'rgba(249, 115, 22, 0.1)',
-                  border: '1px solid rgba(249, 115, 22, 0.3)',
-                  color: '#fb923c',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#f87171',
                   fontSize: '0.65rem',
                   fontWeight: 'bold',
                   padding: '3px 8px',
@@ -305,7 +316,7 @@ export default function ClassicDashboard() {
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px'
                 }}>
-                  ⚠️ Modo Offline Activo
+                  ⚠️ Sin Conexión
                 </div>
               )}
             </div>
