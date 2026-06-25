@@ -75,7 +75,7 @@ function generateDeck() {
   });
 }
 
-export default function ReactionGame({ onExit, activePatientId, addSession, getPatient, sessionMeta, sessionStartTime, isWarmup = false, etiquetaEstudio = null, idSujeto = null }) {
+export default function ReactionGame({ onExit, activePatientId, addSession, getPatient, sessionMeta, sessionStartTime, isWarmup = false, etiquetaEstudio = null, idSujeto = null, onTelemetryUpdate }) {
   const { subscribeToMoves, isConnected, openScanner } = useBluetoothCube();
   const { cubeRotation: globalRotation } = useCubeState();
   const { deactivate: deactivateJoicube } = useJoicube();
@@ -120,6 +120,12 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
   const [currentStreak, setCurrentStreak] = useState(0);
   const [maxStreak, setMaxStreak] = useState(0);
   const [showRachaReset, setShowRachaReset] = useState(false); // Para efecto humo
+
+  useEffect(() => {
+    if (onTelemetryUpdate) {
+      onTelemetryUpdate({ round, results, stage });
+    }
+  }, [round, results, stage, onTelemetryUpdate]);
   
   // Refs para métricas críticas y lógicas temporales
   const timerRef = useRef(0);

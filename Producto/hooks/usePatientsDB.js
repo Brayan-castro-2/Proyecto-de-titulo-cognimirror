@@ -10,6 +10,7 @@ export function usePatientsDB() {
       const { data: pacientesData, error: errPacientes } = await supabase
         .from('pacientes')
         .select('*')
+        .eq('grupo_id', 'grupo_brayan')
         .order('creado_en', { ascending: false });
 
       if (errPacientes) throw errPacientes;
@@ -17,6 +18,7 @@ export function usePatientsDB() {
       const { data: sesionesData, error: errSesiones } = await supabase
         .from('sesiones_clinicas')
         .select('*')
+        .eq('grupo_id', 'grupo_brayan')
         .order('fecha_sesion', { ascending: true });
         
       if (errSesiones) throw errSesiones;
@@ -81,6 +83,7 @@ export function usePatientsDB() {
               etiquetaEstudio: s.etiqueta_estudio,
               idSujeto: s.id_sujeto,
               intentoValido: s.intento_valido !== false,
+              anotacion_clinica: s.anotacion_clinica,
               date: s.fecha_sesion,
               stats: s.estadisticas_json,
               rawTurnsData: rawTurns
@@ -166,9 +169,27 @@ export function usePatientsDB() {
         console.warn("[Auto-Merge] Error al sincronizar datos locales:", errLocal);
       }
 
+      // Guardar base de datos offline consolidada
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cognimirror_offline_patients', JSON.stringify(mapPatients));
+      }
+
       setPatients(mapPatients);
     } catch (error) {
-      console.error('Error fetching data from Supabase:', error);
+      console.error('Error fetching data from Supabase, loading offline fallback data:', error);
+      // Fallback a localStorage offline
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('cognimirror_offline_patients');
+        if (stored) {
+          try {
+            setPatients(JSON.parse(stored));
+            return;
+          } catch (e) {
+            console.error('Error parsing offline patients:', e);
+          }
+        }
+      }
+      setPatients([]);
     }
   }, []);
 
@@ -177,20 +198,28 @@ export function usePatientsDB() {
   }, [fetchPatients]);
 
   const createPatient = useCallback(async (name, idSujeto = null) => {
-    try {
-      const partes = name.trim().split(' ');
-      const nombre = partes[0];
-      const apellido = partes.length > 1 ? partes.slice(1).join(' ') : '';
+    const partes = name.trim().split(' ');
+    const nombre = partes[0];
+    const apellido = partes.length > 1 ? partes.slice(1).join(' ') : '';
+    const tempId = 'local-' + Math.random().toString(36).substr(2, 9);
+    const newPatient = {
+      id: tempId,
+      name: name.trim(),
+      idSujeto: idSujeto,
+      createdAt: new Date().toISOString(),
+      sessions: []
+    };
 
+    try {
       const { data, error } = await supabase
         .from('pacientes')
-        .insert([{ nombre, apellido, id_sujeto: idSujeto }])
+        .insert([{ nombre, apellido, id_sujeto: idSujeto, grupo_id: 'grupo_brayan' }])
         .select()
         .single();
 
       if (error) throw error;
 
-      const newPatient = {
+      const patient = {
         id: data.id,
         name: `${data.nombre} ${data.apellido}`.trim(),
         idSujeto: data.id_sujeto,
@@ -198,11 +227,24 @@ export function usePatientsDB() {
         sessions: []
       };
 
-      setPatients(prev => [newPatient, ...prev]);
-      return newPatient;
+      setPatients(prev => {
+        const updated = [patient, ...prev.filter(p => p.id !== tempId)];
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('cognimirror_offline_patients', JSON.stringify(updated));
+        }
+        return updated;
+      });
+      return patient;
     } catch (error) {
-      console.error('Error creating patient:', error);
-      return null;
+      console.warn('Error creating patient in Supabase, using local patient instead:', error);
+      setPatients(prev => {
+        const updated = [newPatient, ...prev];
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('cognimirror_offline_patients', JSON.stringify(updated));
+        }
+        return updated;
+      });
+      return newPatient;
     }
   }, []);
 
@@ -229,6 +271,25 @@ export function usePatientsDB() {
         rawTurnsData: telemetryData
       };
 
+      const tempSessionId = 'local-sess-' + Math.random().toString(36).substr(2, 9);
+      const localSession = {
+        sessionId: tempSessionId,
+        testType,
+        attemptNumber,
+        clinicalLabel: label,
+        etiquetaEstudio: sessionData.etiquetaEstudio || sessionData.etiqueta_estudio || null,
+        idSujeto: sessionData.idSujeto || sessionData.id_sujeto || null,
+        intentoValido: sessionData.intentoValido !== undefined ? sessionData.intentoValido : true,
+        date: new Date().toISOString(),
+        stats: statsPayload,
+        rawTurnsData: telemetryData
+      };
+
+      // Si el paciente es local, no podemos insertarlo en Supabase sin su paciente
+      if (patientId.startsWith('local-')) {
+        throw new Error('El paciente es local. Guardando la sesión en local storage.');
+      }
+
       const { data: sessionInfo, error: sessionErr } = await supabase
         .from('sesiones_clinicas')
         .insert([{
@@ -239,7 +300,8 @@ export function usePatientsDB() {
           estadisticas_json: statsPayload,
           etiqueta_estudio: sessionData.etiquetaEstudio || sessionData.etiqueta_estudio || null,
           id_sujeto: sessionData.idSujeto || sessionData.id_sujeto || null,
-          intento_valido: sessionData.intentoValido !== undefined ? sessionData.intentoValido : true
+          intento_valido: sessionData.intentoValido !== undefined ? sessionData.intentoValido : true,
+          grupo_id: 'grupo_brayan'
         }])
         .select()
         .single();
@@ -254,75 +316,203 @@ export function usePatientsDB() {
         etiquetaEstudio: sessionInfo.etiqueta_estudio,
         idSujeto: sessionInfo.id_sujeto,
         intentoValido: sessionInfo.intento_valido,
+        anotacion_clinica: sessionInfo.anotacion_clinica,
         date: sessionInfo.fecha_sesion,
         stats: sessionInfo.estadisticas_json,
         rawTurnsData: telemetryData
       };
 
       if (telemetryData && telemetryData.length > 0) {
-        if (testType === 'reaction') {
-          const rows = telemetryData.map(t => ({
-            id_sesion: sessionInfo.id,
-            nivel: t.round || t.level || 0,
-            tiempo_reaccion_ms: t.time !== undefined ? t.time : (t.latencyMs !== undefined ? t.latencyMs : null),
-            cara_esperada: t.expected || t.expectedFace,
-            cara_girada: t.actualFace || t.userFace || null,
-            es_correcto: t.status === 'Ok' || t.status === 'Corregido' || t.isCorrect || false,
-            timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
-          }));
-          await supabase.from('resultados_juego_reaccion').insert(rows);
-        } else if (testType === 'memory') {
-          const rows = telemetryData.map(t => ({
-            id_sesion: sessionInfo.id,
-            nivel: t.level || 0,
-            intento: t.trial || 'A',
-            cara_esperada: t.expectedFace || t.expected || null,
-            cara_girada: t.userFace || t.actualFace || null,
-            es_correcto: t.isCorrect !== undefined ? t.isCorrect : (t.status === 'Ok' || t.status === 'Corregido'),
-            latencia_ms: t.latencyMs !== undefined ? t.latencyMs : (t.time || null),
-            array_latencias_intra: t.moveLatencies || null,
-            tipo_error: t.errorType || null,
-            timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
-          }));
-          await supabase.from('resultados_juego_memoria').insert(rows);
+        try {
+          if (testType === 'reaction') {
+            const rows = telemetryData.map(t => ({
+              id_sesion: sessionInfo.id,
+              nivel: t.round || t.level || 0,
+              tiempo_reaccion_ms: t.time !== undefined ? t.time : (t.latencyMs !== undefined ? t.latencyMs : null),
+              cara_esperada: t.expected || t.expectedFace,
+              cara_girada: t.actualFace || t.userFace || null,
+              es_correcto: t.status === 'Ok' || t.status === 'Corregido' || t.isCorrect || false,
+              timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
+            }));
+            await supabase.from('resultados_juego_reaccion').insert(rows);
+          } else if (testType === 'memory') {
+            const rows = telemetryData.map(t => ({
+              id_sesion: sessionInfo.id,
+              nivel: t.level || 0,
+              intento: t.trial || 'A',
+              cara_esperada: t.expectedFace || t.expected || null,
+              cara_girada: t.userFace || t.actualFace || null,
+              es_correcto: t.isCorrect !== undefined ? t.isCorrect : (t.status === 'Ok' || t.status === 'Corregido'),
+              latencia_ms: t.latencyMs !== undefined ? t.latencyMs : (t.time || null),
+              array_latencias_intra: t.moveLatencies || null,
+              tipo_error: t.errorType || null,
+              timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
+            }));
+            await supabase.from('resultados_juego_memoria').insert(rows);
+          }
+        } catch (telemetryErr) {
+          console.warn('Error inserting relational telemetry:', telemetryErr);
         }
       }
 
       setPatients(prev => {
         const newData = [...prev];
-        newData[patientIndex].sessions.push(newSession);
+        const idx = newData.findIndex(p => p.id === patientId);
+        if (idx !== -1) {
+          newData[idx].sessions = [...newData[idx].sessions.filter(s => s.sessionId !== tempSessionId), newSession];
+        }
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('cognimirror_offline_patients', JSON.stringify(newData));
+        }
         return newData;
       });
 
       return newSession;
     } catch (error) {
-      console.error('Error adding session:', error);
-      return null;
+      console.warn('Error adding session to Supabase, saving to local storage only:', error);
+      
+      const patientIndex = patients.findIndex(p => p.id === patientId);
+      if (patientIndex === -1) return null;
+      const patient = patients[patientIndex];
+      const testType = sessionData.testType || 'reaction';
+      const testTypeSessions = patient.sessions.filter(s => (s.testType || 'reaction') === testType);
+      const attemptNumber = testTypeSessions.length + 1;
+      let label = sessionData.clinicalLabel;
+      if (!label) {
+        if (attemptNumber === 1) label = 'Ensayo / Familiarización';
+        else if (attemptNumber === 2) label = 'Línea Base';
+        else label = 'Evaluación de Seguimiento';
+      }
+      const telemetryData = sessionData.telemetry || sessionData.rawTurnsData || [];
+      const statsPayload = {
+        ...(sessionData.metrics || sessionData.stats || {}),
+        rawTurnsData: telemetryData
+      };
+      const tempSessionId = 'local-sess-' + Math.random().toString(36).substr(2, 9);
+      const localSession = {
+        sessionId: tempSessionId,
+        testType,
+        attemptNumber,
+        clinicalLabel: label,
+        etiquetaEstudio: sessionData.etiquetaEstudio || sessionData.etiqueta_estudio || null,
+        idSujeto: sessionData.idSujeto || sessionData.id_sujeto || null,
+        intentoValido: sessionData.intentoValido !== undefined ? sessionData.intentoValido : true,
+        date: new Date().toISOString(),
+        stats: statsPayload,
+        rawTurnsData: telemetryData
+      };
+
+      setPatients(prev => {
+        const newData = [...prev];
+        const idx = newData.findIndex(p => p.id === patientId);
+        if (idx !== -1) {
+          newData[idx].sessions = [...newData[idx].sessions, localSession];
+        }
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('cognimirror_offline_patients', JSON.stringify(newData));
+        }
+        return newData;
+      });
+
+      return localSession;
     }
   }, [patients]);
 
   const deletePatient = useCallback(async (patientId) => {
     try {
-      await supabase.from('pacientes').delete().eq('id', patientId);
-      setPatients(prev => prev.filter(p => p.id !== patientId));
-      if (activePatientId === patientId) setActivePatientId(null);
+      if (!patientId.startsWith('local-')) {
+        await supabase.from('pacientes').delete().eq('id', patientId);
+      }
     } catch (error) {
-      console.error('Error deleting patient:', error);
+      console.warn('Error deleting patient in Supabase:', error);
     }
+    setPatients(prev => {
+      const updated = prev.filter(p => p.id !== patientId);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cognimirror_offline_patients', JSON.stringify(updated));
+      }
+      return updated;
+    });
+    if (activePatientId === patientId) setActivePatientId(null);
   }, [activePatientId]);
 
   const deleteSession = useCallback(async (patientId, sessionId) => {
     try {
-      await supabase.from('sesiones_clinicas').delete().eq('id', sessionId);
-      await fetchPatients();
+      if (!sessionId.startsWith('local-sess-')) {
+        await supabase.from('sesiones_clinicas').delete().eq('id', sessionId);
+      }
     } catch (error) {
-      console.error('Error deleting session:', error);
+      console.warn('Error deleting session in Supabase:', error);
     }
-  }, [fetchPatients]);
+    setPatients(prev => {
+      const newData = [...prev];
+      const idx = newData.findIndex(p => p.id === patientId);
+      if (idx !== -1) {
+        newData[idx].sessions = newData[idx].sessions.filter(s => s.sessionId !== sessionId);
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cognimirror_offline_patients', JSON.stringify(newData));
+      }
+      return newData;
+    });
+  }, []);
 
   const getPatient = useCallback((id) => {
     return patients.find(p => p.id === id);
   }, [patients]);
+
+  const fetchRemoteEvaluations = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('evaluaciones_remotas')
+        .select('*, pacientes(nombre, apellido, id_sujeto)')
+        .eq('grupo_id', 'grupo_brayan')
+        .order('creado_en', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching remote evaluations:', error);
+      return [];
+    }
+  }, []);
+
+  const createRemoteEvaluation = useCallback(async (patientId, testType) => {
+    try {
+      const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      const expiraEn = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from('evaluaciones_remotas')
+        .insert([{
+          id_paciente: patientId,
+          tipo_test: testType,
+          token: token,
+          activo: true,
+          grupo_id: 'grupo_brayan',
+          expira_en: expiraEn
+        }])
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error creating remote evaluation:', error);
+      throw error;
+    }
+  }, []);
+
+  const invalidateRemoteEvaluation = useCallback(async (evalId) => {
+    try {
+      const { error } = await supabase
+        .from('evaluaciones_remotas')
+        .update({ activo: false })
+        .eq('id', evalId);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error invalidating remote evaluation:', error);
+      throw error;
+    }
+  }, []);
 
   return {
     patients,
@@ -333,6 +523,9 @@ export function usePatientsDB() {
     deletePatient,
     deleteSession,
     getPatient,
-    refreshData: fetchPatients
+    refreshData: fetchPatients,
+    fetchRemoteEvaluations,
+    createRemoteEvaluation,
+    invalidateRemoteEvaluation
   };
 }

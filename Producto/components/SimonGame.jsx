@@ -48,7 +48,7 @@ const playTone = (frequency, type = 'triangle', duration = 0.4) => {
   }
 };
 
-export default function SimonGame({ onExit, playerName, sessionMeta, sessionStartTime }) {
+export default function SimonGame({ onExit, playerName, sessionMeta, sessionStartTime, onTelemetryUpdate }) {
   const { isConnected, subscribeToMoves, openScanner } = useBluetoothCube();
 
   const wasConnectedAtStartRef = useRef(isConnected);
@@ -75,6 +75,12 @@ export default function SimonGame({ onExit, playerName, sessionMeta, sessionStar
   const [levelUpFlash, setLevelUpFlash] = useState(false);
   const prevUserIndexRef = useRef(userIndex);
   const prevLevelRef = useRef(level);
+
+  useEffect(() => {
+    if (onTelemetryUpdate) {
+      onTelemetryUpdate({ level, trial, telemetry, gameState });
+    }
+  }, [level, trial, telemetry, gameState, onTelemetryUpdate]);
 
   // Fallas
   useEffect(() => {
@@ -123,6 +129,31 @@ export default function SimonGame({ onExit, playerName, sessionMeta, sessionStar
     });
     return () => unsubscribe();
   }, [subscribeToMoves, handleCubeInput, gameState]);
+
+  // Atajos de teclado para simulación de giros en SimonGame (Memory Mirror)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (gameState !== 'waiting_for_user') return;
+      const keyUpper = e.key.toUpperCase();
+      let face = null;
+
+      if (e.key === 'ArrowRight' || keyUpper === 'L') face = 'R';
+      else if (e.key === 'ArrowLeft' || keyUpper === 'A') face = 'L';
+      else if (e.key === 'ArrowUp' || keyUpper === 'U') face = 'U';
+      else if (e.key === 'ArrowDown' || keyUpper === 'D') face = 'D';
+      else if (e.key === ' ' || e.key === 'Enter' || keyUpper === 'F') face = 'F';
+
+      if (face) {
+        handleCubeInput(face);
+        // Feedback de audio durante el turno del usuario
+        if (FACE_FREQUENCIES[face]) {
+          playTone(FACE_FREQUENCIES[face], 'triangle', 0.35);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleCubeInput, gameState]);
 
   // Audio durante la reproducción de la secuencia del cubo virtual
   useEffect(() => {

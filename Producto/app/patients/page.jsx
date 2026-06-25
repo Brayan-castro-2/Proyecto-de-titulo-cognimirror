@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import { usePatientsDB } from '../../hooks/usePatientsDB';
 import { Users, Plus, Brain, Zap, ArrowLeft, Calendar, Search, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function PatientDirectory() {
   const router = useRouter();
   const { patients, createPatient } = usePatientsDB();
+  const { signOut } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newPatientName, setNewPatientName] = useState('');
@@ -43,10 +45,18 @@ export default function PatientDirectory() {
         
         {/* Header Premium */}
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16 border-b border-white/5 pb-8">
-          <div>
-            <Link href="/dashboard" className="inline-flex items-center gap-2 text-white/30 hover:text-white text-xs tracking-widest uppercase font-bold mb-6 transition-colors">
-              <ArrowLeft size={14} /> Regresar a Panel
-            </Link>
+          <div className="w-full md:w-auto flex-1">
+            <div className="flex justify-between items-center w-full mb-6">
+              <Link href="/dashboard" className="inline-flex items-center gap-2 text-white/30 hover:text-white text-xs tracking-widest uppercase font-bold transition-colors">
+                <ArrowLeft size={14} /> Regresar a Panel
+              </Link>
+              <button 
+                onClick={signOut} 
+                className="inline-flex items-center gap-2 text-red-400/60 hover:text-red-400 text-xs tracking-widest uppercase font-bold transition-colors bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/20 px-3 py-1.5 rounded"
+              >
+                🔒 Cerrar Sesión
+              </button>
+            </div>
             <h1 className="text-5xl md:text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white via-white/90 to-white/30">
               Directorio.
             </h1>

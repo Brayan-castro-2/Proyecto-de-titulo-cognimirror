@@ -36,7 +36,11 @@ export default function LoginPage() {
     const { data, error } = await signIn(email, password);
 
     if (error) {
-      setErrorMsg('Credenciales inválidas. Revisa tu correo y contraseña.');
+      if (error.message && error.message.toLowerCase().includes('email not confirmed')) {
+        setErrorMsg('Debes confirmar tu correo electrónico antes de iniciar sesión. (O desactiva "Confirm Email" en Supabase Auth Settings).');
+      } else {
+        setErrorMsg(error.message || 'Credenciales inválidas. Revisa tu correo y contraseña.');
+      }
       setIsLoading(false);
     } else {
       setSuccessMsg('¡Sesión iniciada con éxito! Redirigiendo...');
@@ -76,24 +80,44 @@ export default function LoginPage() {
       setErrorMsg(error.message || 'Ocurrió un error durante el registro.');
       setIsLoading(false);
     } else {
-      // Supabase por defecto puede requerir confirmación por correo
-      const requiresConfirmation = data?.user?.identities?.length === 0 || !data?.session;
-      
-      if (requiresConfirmation) {
-        setSuccessMsg('¡Registro exitoso! Por favor, verifica tu correo electrónico para activar tu cuenta.');
+      if (data?.isMock) {
+        setSuccessMsg('¡Registro local exitoso! Iniciando sesión automáticamente...');
         // Limpiamos los campos
         setEmail('');
         setPassword('');
         setFullName('');
         setConfirmPassword('');
-        setActiveTab('login');
+        
+        // Autologueo
+        const loginRes = await signIn(email, password);
+        if (!loginRes.error) {
+          setTimeout(() => {
+            router.replace('/dashboard');
+          }, 1000);
+        } else {
+          setErrorMsg(loginRes.error.message || 'Error al iniciar sesión automática.');
+          setIsLoading(false);
+        }
       } else {
-        setSuccessMsg('¡Registro exitoso! Iniciando sesión...');
-        setTimeout(() => {
-          router.replace('/dashboard');
-        }, 1000);
+        // Supabase por defecto puede requerir confirmación por correo
+        const requiresConfirmation = data?.user?.identities?.length === 0 || !data?.session;
+        
+        if (requiresConfirmation) {
+          setSuccessMsg('¡Registro exitoso! Por favor, verifica tu correo electrónico para activar tu cuenta.');
+          // Limpiamos los campos
+          setEmail('');
+          setPassword('');
+          setFullName('');
+          setConfirmPassword('');
+          setActiveTab('login');
+        } else {
+          setSuccessMsg('¡Registro exitoso! Iniciando sesión...');
+          setTimeout(() => {
+            router.replace('/dashboard');
+          }, 1000);
+        }
+        setIsLoading(false);
       }
-      setIsLoading(false);
     }
   };
 

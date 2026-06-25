@@ -386,13 +386,13 @@ export default function MemoryGameView({ onExit, subjectId, etiquetaEstudio, isW
           playerName={activePatient?.name || 'Paciente'}
           sessionMeta={sessionMeta}
           sessionStartTime={sessionStartTime}
-          onExit={(record) => { 
+          onExit={async (record) => { 
             if (record) {
               const enrichedRecord = { ...record, playerName: activePatient?.name };
               
               if (!isWarmupMode) {
                 // Guardar la sesión automáticamente con soporte de estudio y sujeto
-                addSession(activePatientId, {
+                const saved = await addSession(activePatientId, {
                   testType: 'memory',
                   attemptNumber: sessionMeta?.attemptNumber || 1,
                   clinicalLabel: etiquetaEstudio ? 'Evaluación Oficial' : (sessionMeta?.clinicalLabel || 'Línea Base'),
@@ -402,6 +402,9 @@ export default function MemoryGameView({ onExit, subjectId, etiquetaEstudio, isW
                   telemetry: record.telemetry,
                   date: new Date().toISOString()
                 });
+                if (saved && saved.sessionId) {
+                  enrichedRecord.sessionId = saved.sessionId;
+                }
               } else {
                 console.log('[Práctica] Sesión de práctica finalizada. No se guarda en Supabase.');
               }

@@ -6,10 +6,12 @@ import { supabase } from '../../utils/supabaseClient';
 import { usePatientsDB } from '../../hooks/usePatientsDB';
 import { Play, AlertTriangle, ArrowLeft, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import Link from 'next/link';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function EvaluadorPanel() {
   const router = useRouter();
   const { createPatient, patients, refreshData } = usePatientsDB();
+  const { signOut } = useAuth();
   const [subjectId, setSubjectId] = useState('S-01');
   const [selectedGame, setSelectedGame] = useState('reaction');
   const [testMode, setTestMode] = useState('official'); // 'official' o 'practice'
@@ -41,8 +43,24 @@ export default function EvaluadorPanel() {
         .eq('id_sujeto', idSujeto)
         .maybeSingle();
 
-      if (errPac || !paciente) {
-        setRecentSessions([]);
+      if (errPac) throw errPac;
+
+      if (!paciente) {
+        // Fallback local: Buscar en la lista de pacientes cargados
+        const localP = patients.find(p => p.idSujeto === idSujeto);
+        if (localP) {
+          const sessionsMapped = localP.sessions.map(s => ({
+            id: s.sessionId,
+            intento_numero: s.attemptNumber,
+            etiqueta_clinica: s.clinicalLabel,
+            fecha_sesion: s.date,
+            intento_valido: s.intentoValido,
+            etiqueta_estudio: s.etiquetaEstudio
+          })).slice().reverse().slice(0, 5);
+          setRecentSessions(sessionsMapped);
+        } else {
+          setRecentSessions([]);
+        }
         return;
       }
 
@@ -60,7 +78,22 @@ export default function EvaluadorPanel() {
         setRecentSessions([]);
       }
     } catch (err) {
-      console.error('Error fetching recent sessions:', err);
+      console.warn('Error fetching recent sessions from Supabase, trying offline fallback:', err);
+      // Fallback local: Buscar en la lista de pacientes cargados
+      const localP = patients.find(p => p.idSujeto === idSujeto);
+      if (localP) {
+        const sessionsMapped = localP.sessions.map(s => ({
+          id: s.sessionId,
+          intento_numero: s.attemptNumber,
+          etiqueta_clinica: s.clinicalLabel,
+          fecha_sesion: s.date,
+          intento_valido: s.intentoValido,
+          etiqueta_estudio: s.etiquetaEstudio
+        })).slice().reverse().slice(0, 5);
+        setRecentSessions(sessionsMapped);
+      } else {
+        setRecentSessions([]);
+      }
     }
   };
 
@@ -82,28 +115,44 @@ export default function EvaluadorPanel() {
     setSuccessMsg('');
 
     try {
-      // 1. Buscar si el sujeto existe en pacientes
-      let { data: paciente, error: errFind } = await supabase
-        .from('pacientes')
-        .select('id, nombre, apellido')
-        .eq('id_sujeto', subjectId.trim())
-        .maybeSingle();
-
-      if (errFind) throw errFind;
-
       let patientUuid = '';
 
-      if (!paciente) {
-        // 2. Crear de forma automática el paciente si no existe
-        console.log(`Creando sujeto autogenerado para: ${subjectId}`);
-        const newP = await createPatient(`Sujeto ${subjectId}`, subjectId.trim());
-        if (newP) {
-          patientUuid = newP.id;
+      // 1. Intentar buscar en Supabase
+      try {
+        let { data: paciente, error: errFind } = await supabase
+          .from('pacientes')
+          .select('id, nombre, apellido')
+          .eq('id_sujeto', subjectId.trim())
+          .maybeSingle();
+
+        if (errFind) throw errFind;
+
+        if (!paciente) {
+          // 2. Crear de forma automática el paciente si no existe
+          console.log(`Creando sujeto autogenerado para: ${subjectId}`);
+          const newP = await createPatient(`Sujeto ${subjectId}`, subjectId.trim());
+          if (newP) {
+            patientUuid = newP.id;
+          } else {
+            throw new Error('No se pudo crear el perfil del paciente.');
+          }
         } else {
-          throw new Error('No se pudo crear el perfil del paciente en la base de datos.');
+          patientUuid = paciente.id;
         }
-      } else {
-        patientUuid = paciente.id;
+      } catch (supabaseErr) {
+        console.warn('Supabase offline in handleStartTest, falling back to local patients:', supabaseErr);
+        // Fallback local
+        let localP = patients.find(p => p.idSujeto === subjectId.trim());
+        if (!localP) {
+          const newP = await createPatient(`Sujeto ${subjectId}`, subjectId.trim());
+          if (newP) {
+            patientUuid = newP.id;
+          } else {
+            throw new Error('No se pudo crear el perfil local del paciente.');
+          }
+        } else {
+          patientUuid = localP.id;
+        }
       }
 
       // Refrescar el estado de los pacientes locales en el hook
@@ -134,47 +183,77 @@ export default function EvaluadorPanel() {
     setSuccessMsg('');
 
     try {
-      // 1. Buscar paciente
-      const { data: paciente, error: errPac } = await supabase
-        .from('pacientes')
-        .select('id')
-        .eq('id_sujeto', subjectId.trim())
-        .maybeSingle();
+      let success = false;
+      let attemptNum = 0;
+      let sessionTime = '';
 
-      if (errPac) throw errPac;
-      if (!paciente) {
-        setErrorMsg(`No se encontró ningún paciente registrado bajo el ID Sujeto: ${subjectId}`);
-        setPanicLoading(false);
-        return;
+      try {
+        // 1. Buscar paciente
+        const { data: paciente, error: errPac } = await supabase
+          .from('pacientes')
+          .select('id')
+          .eq('id_sujeto', subjectId.trim())
+          .maybeSingle();
+
+        if (errPac) throw errPac;
+        
+        if (paciente) {
+          // 2. Buscar su última sesión
+          const { data: sesiones, error: errSes } = await supabase
+            .from('sesiones_clinicas')
+            .select('id, intento_numero, fecha_sesion')
+            .eq('id_paciente', paciente.id)
+            .order('fecha_sesion', { ascending: false })
+            .limit(1);
+
+          if (errSes) throw errSes;
+
+          if (sesiones && sesiones.length > 0) {
+            const ultimaSesion = sesiones[0];
+            // 3. Marcar intento_valido = false
+            const { error: errUpd } = await supabase
+              .from('sesiones_clinicas')
+              .update({ intento_valido: false })
+              .eq('id', ultimaSesion.id);
+
+            if (errUpd) throw errUpd;
+
+            attemptNum = ultimaSesion.intento_numero;
+            sessionTime = new Date(ultimaSesion.fecha_sesion).toLocaleTimeString();
+            success = true;
+          }
+        }
+      } catch (supabaseErr) {
+        console.warn('Supabase error in handleAnularIntento, doing local-only cancellation:', supabaseErr);
       }
 
-      // 2. Buscar su última sesión
-      const { data: sesiones, error: errSes } = await supabase
-        .from('sesiones_clinicas')
-        .select('id, intento_numero, fecha_sesion')
-        .eq('id_paciente', paciente.id)
-        .order('fecha_sesion', { ascending: false })
-        .limit(1);
+      // Si no se pudo en Supabase o falló la conexión, anular localmente
+      if (!success) {
+        const localP = patients.find(p => p.idSujeto === subjectId.trim());
+        if (!localP || localP.sessions.length === 0) {
+          setErrorMsg(`No se encontraron sesiones locales para el sujeto ${subjectId} para anular.`);
+          setPanicLoading(false);
+          return;
+        }
 
-      if (errSes) throw errSes;
+        // El último intento local
+        const ultimaSes = localP.sessions[localP.sessions.length - 1];
+        
+        // Modificar el estado local
+        localP.sessions[localP.sessions.length - 1].intentoValido = false;
+        
+        // Guardar la actualización en local storage
+        if (typeof window !== 'undefined') {
+          const updatedPatients = patients.map(p => p.id === localP.id ? localP : p);
+          localStorage.setItem('cognimirror_offline_patients', JSON.stringify(updatedPatients));
+        }
 
-      if (!sesiones || sesiones.length === 0) {
-        setErrorMsg(`El sujeto ${subjectId} no registra sesiones para anular.`);
-        setPanicLoading(false);
-        return;
+        attemptNum = ultimaSes.attemptNumber;
+        sessionTime = new Date(ultimaSes.date).toLocaleTimeString();
+        success = true;
       }
 
-      const ultimaSesion = sesiones[0];
-
-      // 3. Marcar intento_valido = false
-      const { error: errUpd } = await supabase
-        .from('sesiones_clinicas')
-        .update({ intento_valido: false })
-        .eq('id', ultimaSesion.id);
-
-      if (errUpd) throw errUpd;
-
-      setSuccessMsg(`¡Botón de Pánico Activado! El Intento N° ${ultimaSesion.intento_numero} realizado el ${new Date(ultimaSesion.fecha_sesion).toLocaleTimeString()} fue ANULADO con éxito (marcado como inválido para el estudio).`);
+      setSuccessMsg(`¡Botón de Pánico Activado! El Intento N° ${attemptNum} realizado a las ${sessionTime} fue ANULADO con éxito (marcado como inválido localmente).`);
       
       // Actualizar listado y base de datos local
       await refreshData();
@@ -199,9 +278,17 @@ export default function EvaluadorPanel() {
         
         {/* Header */}
         <div className="text-center mb-10">
-          <Link href="/dashboard" className="inline-flex items-center gap-2 text-white/30 hover:text-white text-xs tracking-widest uppercase font-bold mb-6 transition-colors">
-            <ArrowLeft size={12} /> Volver al Panel General
-          </Link>
+          <div className="flex justify-between items-center w-full mb-6">
+            <Link href="/dashboard" className="inline-flex items-center gap-2 text-white/30 hover:text-white text-xs tracking-widest uppercase font-bold transition-colors">
+              <ArrowLeft size={12} /> Volver al Panel General
+            </Link>
+            <button 
+              onClick={signOut} 
+              className="inline-flex items-center gap-2 text-red-400/60 hover:text-red-400 text-xs tracking-widest uppercase font-bold transition-colors bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/20 px-3 py-1.5 rounded"
+            >
+              🔒 Cerrar Sesión
+            </button>
+          </div>
           <div className="flex justify-center items-center gap-3 text-3xl font-black text-white tracking-tight">
             <span>🧊</span>
             <span>Cogni<span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">Mirror</span></span>

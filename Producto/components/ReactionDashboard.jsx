@@ -1,6 +1,6 @@
 'use client';
-
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { supabase } from '../utils/supabaseClient';
 import { Brain, Zap, Activity, Eye, TrendingUp } from 'lucide-react';
 import { ComposedChart, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { exportReactionMirrorExcel } from '../utils/exportExcel';
@@ -126,6 +126,72 @@ export default function ReactionDashboard({
 }) {
   const [chartFilter, setChartFilter] = useState('ALL');
   const [showAllTurns, setShowAllTurns] = useState(false);
+
+  const [note, setNote] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('');
+  const [roundComments, setRoundComments] = useState({});
+  const [statsJson, setStatsJson] = useState({});
+
+  useEffect(() => {
+    if (!recordId || String(recordId).startsWith('local-') || String(recordId).startsWith('warmup-')) return;
+    async function loadNote() {
+      const { data, error } = await supabase
+        .from('sesiones_clinicas')
+        .select('anotacion_clinica, estadisticas_json')
+        .eq('id', recordId)
+        .single();
+      if (!error && data) {
+        if (data.anotacion_clinica) {
+          setNote(data.anotacion_clinica);
+        }
+        if (data.estadisticas_json) {
+          setStatsJson(data.estadisticas_json);
+          setRoundComments(data.estadisticas_json.roundComments || {});
+        }
+      }
+    }
+    loadNote();
+  }, [recordId]);
+
+  const handleSaveNote = async () => {
+    if (!recordId || String(recordId).startsWith('local-') || String(recordId).startsWith('warmup-')) {
+      setSaveStatus('No se puede guardar nota en una sesión local o de práctica.');
+      return;
+    }
+    setSavingNote(true);
+    setSaveStatus('');
+    try {
+      const { error } = await supabase
+        .from('sesiones_clinicas')
+        .update({ anotacion_clinica: note })
+        .eq('id', recordId);
+      if (error) throw error;
+      setSaveStatus('Observación guardada con éxito.');
+    } catch (e) {
+      console.error('Error saving note:', e);
+      setSaveStatus('Error al guardar la observación.');
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleSaveRoundComment = async (roundKey, commentText) => {
+    if (!recordId || String(recordId).startsWith('local-') || String(recordId).startsWith('warmup-')) return;
+    const newComments = { ...roundComments, [roundKey]: commentText };
+    setRoundComments(newComments);
+    const updatedStats = { ...statsJson, roundComments: newComments };
+    setStatsJson(updatedStats);
+    try {
+      const { error } = await supabase
+        .from('sesiones_clinicas')
+        .update({ estadisticas_json: updatedStats })
+        .eq('id', recordId);
+      if (error) throw error;
+    } catch (e) {
+      console.error('Error saving round comment:', e);
+    }
+  };
   
   const isDemoData = !rawTurnsData || rawTurnsData.length === 0;
   const actualTurnsData = useMemo(() => {
@@ -299,8 +365,10 @@ export default function ReactionDashboard({
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 font-sans p-4 md:p-8 report-container">
       <style>{`
+        .print-only { display: none; }
         @media print {
           .no-print { display: none !important; }
+          .print-only { display: block !important; }
           body { background: white !important; }
           .report-container { padding: 0 !important; background: white !important; }
           .bg-white { border: 1px solid #e2e8f0 !important; box-shadow: none !important; }
@@ -657,6 +725,33 @@ export default function ReactionDashboard({
           </div>
         </div>
 
+        {/* BITÁCORA CLÍNICA */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 no-print">
+          <h2 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+            📝 Bitácora Clínica (Observación Cualitativa)
+          </h2>
+          <p className="text-sm text-slate-500 mb-4 font-medium">Registra observaciones cualitativas sobre la conducta, distractores, nivel de ansiedad o fatiga del paciente durante el test de reacción.</p>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Escribe aquí observaciones cualitativas para el expediente del alumno..."
+            className="w-full h-24 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-slate-800 font-medium"
+            disabled={!recordId || String(recordId).startsWith('local-') || String(recordId).startsWith('warmup-')}
+          />
+          <div className="flex justify-between items-center mt-3">
+            <span className={`text-xs font-semibold ${saveStatus.includes('éxito') ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {saveStatus}
+            </span>
+            <button
+              onClick={handleSaveNote}
+              disabled={savingNote || !recordId || String(recordId).startsWith('local-') || String(recordId).startsWith('warmup-')}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed font-bold rounded-lg text-xs tracking-wider transition-all cursor-pointer text-white"
+            >
+              {savingNote ? 'Guardando...' : 'GUARDAR OBSERVACIÓN'}
+            </button>
+          </div>
+        </div>
+
         {/* ── SECCIÓN 3: RADIOGRAFÍA POR TURNOS ── */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
           <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
@@ -711,6 +806,27 @@ export default function ReactionDashboard({
                       </div>
                     </div>
                     <p className="text-sm text-slate-700">{statusText}</p>
+                    
+                    {/* Bitácora por Ronda */}
+                    <div className="mt-2 flex items-center gap-2 no-print">
+                      <input
+                        type="text"
+                        value={roundComments[t.round || t.turn || idx + 1] || ''}
+                        placeholder="Agregar nota para este turno..."
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRoundComments(prev => ({ ...prev, [t.round || t.turn || idx + 1]: val }));
+                        }}
+                        onBlur={(e) => handleSaveRoundComment(t.round || t.turn || idx + 1, e.target.value)}
+                        className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all font-medium"
+                        disabled={!recordId || String(recordId).startsWith('local-') || String(recordId).startsWith('warmup-')}
+                      />
+                    </div>
+                    {roundComments[t.round || t.turn || idx + 1] && (
+                      <p className="text-xs text-indigo-600 font-bold mt-1 bg-indigo-50/50 px-2.5 py-1 rounded-lg border border-indigo-100/50 print-only">
+                        Nota del clínico: {roundComments[t.round || t.turn || idx + 1]}
+                      </p>
+                    )}
                   </div>
                 </div>
               );

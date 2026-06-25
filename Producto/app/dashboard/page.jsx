@@ -24,6 +24,13 @@ export default function ClassicDashboard() {
   const { user, signOut } = useAuth();
 
   const [activeTab, setActiveTab] = useState('session');
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsOfflineMode(!!localStorage.getItem('cognimirror_bypass_session'));
+    }
+  }, []);
   // Lógica de stats vive en refs para performance
   const stateRef = useRef({
     appMode: 'FREE',
@@ -212,16 +219,29 @@ export default function ClassicDashboard() {
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes spin { to { transform: rotate(360deg); } }
         :root { --bg:#0a0c10;--surface:#13161e;--card:#1a1e2a;--border:rgba(255,255,255,0.07);--accent:#2563eb;--green:#22c55e;--yellow:#fbbf24;--red:#ef4444;--text:#e2e8f0;--muted:#64748b; }
-        .dashboard-body { background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column; }
-        header { display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;z-index:10; }
-        .logo { font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8px; }
-        .logo span{color:var(--accent)}
-        .header-stats{display:flex;align-items:center;gap:20px;font-size:.85rem}
-        .header-stat{color:var(--muted)} .header-stat strong{color:var(--text);font-size:1rem}
-        .ble-badge{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:var(--card);border:1px solid var(--border);cursor:pointer;font-size:.8rem;transition:all .2s}
-        .ble-badge:hover{border-color:var(--accent)}
-        .ble-dot{width:8px;height:8px;border-radius:50%;background:var(--red);transition:background .3s}
-        .ble-dot.ok{background:var(--green);box-shadow:0 0 8px var(--green)}
+        .dashboard-body { background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:row; }
+        .sidebar { width:270px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:24px 18px;flex-shrink:0;height:100%;z-index:10;box-sizing:border-box; }
+        .sidebar-logo { font-size:1.2rem;font-weight:900;display:flex;align-items:center;gap:8px;margin-bottom:24px;color:var(--text);letter-spacing:-0.5px; }
+        .sidebar-logo span { color:var(--accent); }
+        .sidebar-user { background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:20px; }
+        .sidebar-user-name { font-size:0.8rem;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+        .sidebar-user-role { font-size:0.65rem;color:var(--muted);font-weight:600;margin-top:2px; }
+        .sidebar-section { margin-bottom:20px; }
+        .sidebar-section-title { font-size:0.6rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:800;margin-bottom:8px;padding-left:4px; }
+        .sidebar-menu { display:flex;flex-direction:column;gap:6px; }
+        .sidebar-link { display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;font-size:0.8rem;font-weight:600;color:var(--muted);text-decoration:none;transition:all 0.2s ease;border:1px solid transparent; }
+        .sidebar-link:hover { color:var(--text);background:rgba(255,255,255,0.04); }
+        .sidebar-link.active { color:#fff;background:rgba(37,99,235,0.12);border-color:rgba(37,99,235,0.25); }
+        .sidebar-link.evaluador-destacado { color:#818cf8;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);font-weight:700; }
+        .sidebar-link.evaluador-destacado:hover { background:rgba(99,102,241,0.12);border-color:rgba(99,102,241,0.35);color:#a5b4fc; }
+        .sidebar-footer { margin-top:auto;display:flex;flex-direction:column;gap:10px; }
+        .sidebar-ble-badge { display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:var(--card);border:1px solid var(--border);cursor:pointer;font-size:0.75rem;font-weight:700;transition:all 0.2s;box-sizing:border-box; }
+        .sidebar-ble-badge:hover { border-color:var(--accent);background:rgba(255,255,255,0.02); }
+        .sidebar-ble-dot { width:7px;height:7px;border-radius:50%;background:var(--red);transition:background .3s; }
+        .sidebar-ble-dot.ok { background:var(--green);box-shadow:0 0 6px var(--green); }
+        .sidebar-btn-salir { display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 12px;border-radius:8px;font-size:0.8rem;font-weight:700;color:var(--red);background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.12);cursor:pointer;transition:all 0.2s; }
+        .sidebar-btn-salir:hover { background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.25); }
+        
         .main{display:flex;flex:1;overflow:hidden}
         .cube-panel{flex:1;position:relative;min-width:0}
         .canvas-wrapper{width:100%;height:100%;touch-action:none}
@@ -261,44 +281,92 @@ export default function ClassicDashboard() {
       `}} />
 
       <div className="dashboard-body">
-        <header>
-          <div className="logo">🧊 <span>Cogni</span>Mirror Cube</div>
-          <div className="header-stats">
-            <div className="header-stat">Rotaciones: <strong id="hdr-moves">0</strong></div>
-            <div className="header-stat">Tiempo: <strong id="hdr-time">00:00.000</strong></div>
-            <div className="header-stat">TPS: <strong id="hdr-tps">0.00</strong></div>
-          </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            {user && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', borderRight: '1px solid var(--border)', paddingRight: 12, marginRight: 2 }}>
-                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text)' }}>
-                  Ps. {user.user_metadata?.full_name || 'Especialista'}
-                </span>
-                <span style={{ fontSize: '0.65rem', color: 'var(--muted)', fontWeight: 600 }}>
-                  Sesión Activa
-                </span>
-              </div>
-            )}
-            <Link href="/patients" className="cube-btn" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text)', borderColor: 'rgba(255,255,255,0.1)' }}>👥 Pacientes</Link>
-            <Link href="/reaction-game" className="cube-btn" style={{ background: 'rgba(37,99,235,0.1)', color: 'var(--accent)' }}>⚡ Reaction Mirror</Link>
-            <Link href="/simon-game" className="cube-btn" style={{ background: 'rgba(168,85,247,0.1)', color: '#c084fc', borderColor: 'rgba(168,85,247,0.3)' }}>🧬 Memory Mirror</Link>
-            <Link href="/evaluador" className="cube-btn" style={{ background: 'rgba(99,102,241,0.1)', color: '#818cf8', borderColor: 'rgba(99,102,241,0.3)', fontWeight: 700 }}>⚙️ Evaluador</Link>
-            <div className="ble-badge" onClick={connectBLE}>
-              <div className={`ble-dot ${isConnected ? 'ok' : ''}`} />
-              <span>{isConnected ? device : 'Conectar'}</span>
+        {/* Panel Lateral (Sidebar) */}
+        <aside className="sidebar">
+          <div className="sidebar-logo">🧊 <span>Cogni</span>Mirror</div>
+          
+          {user && (
+            <div className="sidebar-user">
+              <div className="sidebar-user-name">Ps. {user.user_metadata?.full_name || 'Especialista'}</div>
+              <div className="sidebar-user-role">Sesión Clínica Activa</div>
+              {isOfflineMode && (
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: 'rgba(249, 115, 22, 0.1)',
+                  border: '1px solid rgba(249, 115, 22, 0.3)',
+                  color: '#fb923c',
+                  fontSize: '0.65rem',
+                  fontWeight: 'bold',
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  marginTop: '8px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  ⚠️ Modo Offline Activo
+                </div>
+              )}
             </div>
-            <button 
-              onClick={signOut} 
-              className="cube-btn" 
-              style={{ background: 'rgba(239,68,68,0.08)', color: 'var(--red)', borderColor: 'rgba(239,68,68,0.2)', fontWeight: 700 }}
-              title="Cerrar Sesión"
-            >
-              🔒 Salir
+          )}
+
+          {/* Gestión Clínica */}
+          <div className="sidebar-section">
+            <div className="sidebar-section-title">Gestión Clínica</div>
+            <nav className="sidebar-menu">
+              <Link href="/patients" className="sidebar-link">👥 Directorio Pacientes</Link>
+              <Link href="/export" className="sidebar-link">📥 Exportar e Informes</Link>
+            </nav>
+          </div>
+
+          {/* Evaluaciones */}
+          <div className="sidebar-section">
+            <div className="sidebar-section-title">Evaluaciones</div>
+            <nav className="sidebar-menu">
+              <Link href="/reaction-game" className="sidebar-link">⚡ Reaction Mirror (Local)</Link>
+              <Link href="/simon-game" className="sidebar-link">🧬 Memory Mirror (Local)</Link>
+              <Link href="/remote-eval?token=demo-token" target="_blank" className="sidebar-link">🌐 Evaluación Remota (Demo)</Link>
+            </nav>
+          </div>
+
+          {/* Estudio de Validación */}
+          <div className="sidebar-section">
+            <div className="sidebar-section-title">Estudio Clínico</div>
+            <nav className="sidebar-menu">
+              <Link href="/evaluador" className="sidebar-link evaluador-destacado">
+                ⚙️ Modo Evaluador
+              </Link>
+            </nav>
+          </div>
+
+          {/* Footer del Sidebar */}
+          <div className="sidebar-footer">
+            <div className="sidebar-ble-badge" onClick={connectBLE}>
+              <div className={`sidebar-ble-dot ${isConnected ? 'ok' : ''}`} />
+              <span>{isConnected ? device : 'Conectar Cubo'}</span>
+            </div>
+            <button onClick={signOut} className="sidebar-btn-salir">
+              🔒 Cerrar Sesión
             </button>
           </div>
-        </header>
+        </aside>
 
-        <div className="main">
+        {/* Contenido Principal Derecho */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {/* Barra Superior Simplificada */}
+          <header style={{ display: 'flex', alignItems: 'center', justifyBetween: 'space-between', padding: '12px 20px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Monitoreo del Dispositivo
+            </div>
+            <div className="header-stats" style={{ display: 'flex', gap: '20px', fontSize: '0.85rem' }}>
+              <div className="header-stat" style={{ color: 'var(--muted)' }}>Rotaciones: <strong id="hdr-moves" style={{ color: 'var(--text)' }}>0</strong></div>
+              <div className="header-stat" style={{ color: 'var(--muted)' }}>Tiempo: <strong id="hdr-time" style={{ color: 'var(--text)' }}>00:00.000</strong></div>
+              <div className="header-stat" style={{ color: 'var(--muted)' }}>TPS: <strong id="hdr-tps" style={{ color: 'var(--text)' }}>0.00</strong></div>
+            </div>
+          </header>
+
+          <div className="main">
           <div className="cube-panel">
             <div className="canvas-wrapper">
                 <Cube3DViewer status="gyro_active" size={380} />
@@ -446,6 +514,7 @@ export default function ClassicDashboard() {
           </div>
         </div>
       </div>
+    </div>
     </>
   );
 }
