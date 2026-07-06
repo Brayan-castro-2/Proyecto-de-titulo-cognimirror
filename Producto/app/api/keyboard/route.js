@@ -16,17 +16,15 @@ export async function POST(request) {
     // Traducir acción a tecla de WScript SendKeys
     const sendKey = action === 'right' ? '{RIGHT}' : '{LEFT}';
 
-    // Ruta al script de VBScript en caliente
-    const vbsPath = path.join(process.cwd(), 'scripts', 'press_key.vbs');
+    // Comando nativo de PowerShell usando objeto COM de WScript para máxima compatibilidad
+    const cmd = `powershell -Command "(New-Object -ComObject WScript.Shell).SendKeys('${sendKey}')"`;
 
-    const cmd = `wscript //Nologo "${vbsPath}" "${sendKey}"`;
-
-    console.log(`[API Keyboard] Ejecutando simulación de tecla instantánea: ${action.toUpperCase()}`);
+    console.log(`[API Keyboard] Ejecutando simulación de tecla instantánea por PowerShell: ${action.toUpperCase()}`);
 
     // Ejecutar el comando de forma asíncrona de inmediato
     exec(cmd, (error) => {
       if (error) {
-        console.error('[API Keyboard] Error ejecutando VBScript:', error.message);
+        console.error('[API Keyboard] Error ejecutando PowerShell:', error.message);
       }
     });
 
