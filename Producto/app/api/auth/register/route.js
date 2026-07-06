@@ -58,7 +58,7 @@ export async function POST(request) {
         id: newUser.id,
         email: newUser.email,
         nombre_completo: fullName,
-        rol: 'psicologo', // Definido de forma coherente para CogniMirror
+        rol: 'mecanico', // Valor compatible con el CHECK constraint del taller electromecanico
         activo: true
       }]);
 
