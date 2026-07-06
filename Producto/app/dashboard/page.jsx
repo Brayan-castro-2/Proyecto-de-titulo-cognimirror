@@ -25,6 +25,7 @@ export default function ClassicDashboard() {
 
   const [activeTab, setActiveTab] = useState('session');
   const [isOfflineNetwork, setIsOfflineNetwork] = useState(false);
+  const [isPresentationRemoteActive, setIsPresentationRemoteActive] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -42,6 +43,38 @@ export default function ClassicDashboard() {
       };
     }
   }, []);
+
+  // ── Emulador de Teclado Global por Bluetooth ──
+  useEffect(() => {
+    if (!isPresentationRemoteActive || !isConnected) return;
+    
+    console.log('[Dashboard] Activado puente de teclado global para el cubo inteligente.');
+    const unsub = subscribeToMoves((notation) => {
+      const clean = notation.replace("'", "");
+      const isClockwise = !notation.includes("'");
+      
+      let action = null;
+      // R, U, F horarios avanzan (derecha). L, D, B horarios retroceden (izquierda).
+      if (clean === 'R' || clean === 'U' || clean === 'F') {
+        action = isClockwise ? 'right' : 'left';
+      } else if (clean === 'L' || clean === 'D' || clean === 'B') {
+        action = isClockwise ? 'left' : 'right';
+      }
+      
+      if (action) {
+        fetch('/api/keyboard', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action })
+        }).catch(err => console.warn('[Presentation Remote] Falló simulación de tecla:', err));
+      }
+    });
+
+    return () => {
+      console.log('[Dashboard] Desactivado puente de teclado global.');
+      unsub();
+    };
+  }, [isPresentationRemoteActive, isConnected, subscribeToMoves]);
   // Lógica de stats vive en refs para performance
   const stateRef = useRef({
     appMode: 'FREE',
@@ -348,6 +381,9 @@ export default function ClassicDashboard() {
               <Link href="/evaluador" className="sidebar-link evaluador-destacado">
                 ⚙️ Modo Evaluador
               </Link>
+              <Link href="/defensa" className="sidebar-link">
+                📊 Diapositivas Defensa
+              </Link>
             </nav>
           </div>
 
@@ -394,10 +430,31 @@ export default function ClassicDashboard() {
               </div>
             </div>
 
-            <div className="cube-overlay">
+             <div className="cube-overlay">
               <button className="cube-btn" onClick={startGuidedScramble} style={{ background: 'var(--accent)', color: 'white' }}>🔀 Scramble</button>
               <button className="cube-btn" onClick={() => { resetCubeState(); resetStats(); }} style={{ color: 'var(--green)' }}>🧩 Resolver</button>
               <button className="cube-btn" onClick={calibrateGyro}>⚓ Calibrar</button>
+              
+              <button 
+                className="cube-btn" 
+                onClick={() => {
+                  if (!isConnected) {
+                    alert('Por favor, conecta primero tu cubo inteligente usando el botón de abajo a la izquierda.');
+                    return;
+                  }
+                  setIsPresentationRemoteActive(!isPresentationRemoteActive);
+                }}
+                style={{ 
+                  borderColor: isPresentationRemoteActive ? '#22c55e' : 'var(--border)',
+                  background: isPresentationRemoteActive ? 'rgba(34,197,94,0.15)' : 'rgba(10,12,16,.8)',
+                  color: isPresentationRemoteActive ? '#4ade80' : 'var(--text)',
+                  fontWeight: 'bold',
+                  boxShadow: isPresentationRemoteActive ? '0 0 10px rgba(34,197,94,0.2)' : 'none'
+                }}
+                title={isPresentationRemoteActive ? 'Mando activo - Gira el cubo para pasar diapositivas globales' : 'Usar cubo para pasar diapositivas globales'}
+              >
+                {isPresentationRemoteActive ? '📺 Mando PPT ON' : '📺 Mando PPT'}
+              </button>
 
               {/* ── Botón Joicube ── */}
               <div style={{ display: 'none', position: 'relative', gap: '8px', alignItems: 'center' }}>
