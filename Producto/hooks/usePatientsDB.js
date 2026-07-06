@@ -4,6 +4,18 @@ import { useAuth } from '../contexts/AuthContext';
 
 let isSyncingGlobal = false;
 
+const deduplicateSessions = (sessions) => {
+  if (!sessions) return [];
+  return sessions.filter((s, index, self) => 
+    self.findIndex(x => 
+      (x.sessionId && s.sessionId && x.sessionId === s.sessionId) || 
+      (x.testType === s.testType && 
+       x.attemptNumber === s.attemptNumber && 
+       x.clinicalLabel === s.clinicalLabel)
+    ) === index
+  );
+};
+
 export function usePatientsDB() {
   const [patients, setPatients] = useState([]);
   const [activePatientId, setActivePatientId] = useState(null);
@@ -132,7 +144,11 @@ export function usePatientsDB() {
       }
 
       if (hasChanges) {
-        localStorage.setItem('cognimirror_offline_patients', JSON.stringify(localPatients));
+        const cleanPatients = localPatients.map(p => ({
+          ...p,
+          sessions: deduplicateSessions(p.sessions)
+        }));
+        localStorage.setItem('cognimirror_offline_patients', JSON.stringify(cleanPatients));
       }
     } catch (err) {
       console.error('[Sync] Error general en el despachador de sincronización offline:', err);
@@ -182,65 +198,60 @@ export function usePatientsDB() {
         name: `${p.nombre} ${p.apellido}`.trim(),
         idSujeto: p.id_sujeto,
         createdAt: p.creado_en,
-        sessions: sesionesData
-          .filter(s => s.id_paciente === p.id)
-          .filter((s, index, self) => 
-            self.findIndex(x => 
-              x.tipo_test === s.tipo_test && 
-              x.intento_numero === s.intento_numero && 
-              x.etiqueta_clinica === s.etiqueta_clinica
-            ) === index
-          )
-          .map(s => {
-            let rawTurns = s.estadisticas_json?.rawTurnsData || [];
-            
-            // Reconstrucción desde BD relacional si no existe en el JSON consolidado (datos históricos)
-            if (rawTurns.length === 0) {
-              if (s.tipo_test === 'reaction') {
-                const filtrados = reaccionData?.filter(r => r.id_sesion === s.id) || [];
-                rawTurns = filtrados.map(r => ({
-                  round: r.nivel || 1,
-                  type: r.cara_esperada ? (r.cara_esperada !== 'L' && r.cara_esperada !== 'R' ? 'NOGO' : 'GO') : 'NOGO',
-                  expected: r.cara_esperada,
-                  actualFace: r.cara_girada,
-                  time: r.tiempo_reaccion_ms,
-                  errors: r.es_correcto ? 0 : 1,
-                  timeout: r.tiempo_reaccion_ms === null || r.tiempo_reaccion_ms === 0,
-                  fail: !r.es_correcto && (r.cara_esperada !== 'L' && r.cara_esperada !== 'R'),
-                  isFalseStart: !r.es_correcto && (r.cara_esperada !== 'L' && r.cara_esperada !== 'R'),
-                  isOmission: r.tiempo_reaccion_ms === null || r.tiempo_reaccion_ms === 0,
-                  status: r.es_correcto ? 'Ok' : 'Error'
-                }));
-              } else if (s.tipo_test === 'memory') {
-                const filtrados = memoriaData?.filter(m => m.id_sesion === s.id) || [];
-                rawTurns = filtrados.map(m => ({
-                  level: m.nivel,
-                  trial: m.intento,
-                  expectedFace: m.cara_esperada,
-                  userFace: m.cara_girada,
-                  isCorrect: m.es_correcto,
-                  latencyMs: m.latencia_ms,
-                  moveLatencies: m.array_latencias_intra,
-                  errorType: m.tipo_error,
-                  timestamp: m.timestamp_local
-                }));
+        sessions: deduplicateSessions(
+          sesionesData
+            .filter(s => s.id_paciente === p.id)
+            .map(s => {
+              let rawTurns = s.estadisticas_json?.rawTurnsData || [];
+              
+              // Reconstrucción desde BD relacional si no existe en el JSON consolidado (datos históricos)
+              if (rawTurns.length === 0) {
+                if (s.tipo_test === 'reaction') {
+                  const filtrados = reaccionData?.filter(r => r.id_sesion === s.id) || [];
+                  rawTurns = filtrados.map(r => ({
+                    round: r.nivel || 1,
+                    type: r.cara_esperada ? (r.cara_esperada !== 'L' && r.cara_esperada !== 'R' ? 'NOGO' : 'GO') : 'NOGO',
+                    expected: r.cara_esperada,
+                    actualFace: r.cara_girada,
+                    time: r.tiempo_reaccion_ms,
+                    errors: r.es_correcto ? 0 : 1,
+                    timeout: r.tiempo_reaccion_ms === null || r.tiempo_reaccion_ms === 0,
+                    fail: !r.es_correcto && (r.cara_esperada !== 'L' && r.cara_esperada !== 'R'),
+                    isFalseStart: !r.es_correcto && (r.cara_esperada !== 'L' && r.cara_esperada !== 'R'),
+                    isOmission: r.tiempo_reaccion_ms === null || r.tiempo_reaccion_ms === 0,
+                    status: r.es_correcto ? 'Ok' : 'Error'
+                  }));
+                } else if (s.tipo_test === 'memory') {
+                  const filtrados = memoriaData?.filter(m => m.id_sesion === s.id) || [];
+                  rawTurns = filtrados.map(m => ({
+                    level: m.nivel,
+                    trial: m.intento,
+                    expectedFace: m.cara_esperada,
+                    userFace: m.cara_girada,
+                    isCorrect: m.es_correcto,
+                    latencyMs: m.latencia_ms,
+                    moveLatencies: m.array_latencias_intra,
+                    errorType: m.tipo_error,
+                    timestamp: m.timestamp_local
+                  }));
+                }
               }
-            }
 
-            return {
-              sessionId: s.id,
-              testType: s.tipo_test,
-              attemptNumber: s.intento_numero,
-              clinicalLabel: s.etiqueta_clinica,
-              etiquetaEstudio: s.etiqueta_estudio,
-              idSujeto: s.id_sujeto,
-              intentoValido: s.intento_valido !== false,
-              anotacion_clinica: s.anotacion_clinica,
-              date: s.fecha_sesion,
-              stats: s.estadisticas_json,
-              rawTurnsData: rawTurns
-            };
-          })
+              return {
+                sessionId: s.id,
+                testType: s.tipo_test,
+                attemptNumber: s.intento_numero,
+                clinicalLabel: s.etiqueta_clinica,
+                etiquetaEstudio: s.etiqueta_estudio,
+                idSujeto: s.id_sujeto,
+                intentoValido: s.intento_valido !== false,
+                anotacion_clinica: s.anotacion_clinica,
+                date: s.fecha_sesion,
+                stats: s.estadisticas_json,
+                rawTurnsData: rawTurns
+              };
+            })
+        )
       }));
 
       // Fallback local inteligente para recuperar telemetrías perdidas de ayer en este navegador
@@ -254,66 +265,68 @@ export function usePatientsDB() {
 
             return {
               ...sp,
-              sessions: sp.sessions.map(ss => {
-                if (ss.rawTurnsData && ss.rawTurnsData.length > 0) return ss;
-                
-                // Si la sesión de Supabase no tiene telemetría, la buscamos en el localStorage local por coincidencia de fecha o intento
-                const localSession = lp.sessions?.find(ls => 
-                  ls.testType === ss.testType && 
-                  (ls.attemptNumber === ss.attemptNumber || Math.abs(new Date(ls.date) - new Date(ss.date)) < 30000)
-                );
-
-                if (localSession && localSession.rawTurnsData && localSession.rawTurnsData.length > 0) {
-                  console.log(`[Auto-Merge] Inyectada telemetría local de ayer para la sesión ${ss.sessionId} de ${sp.name}`);
-                  const telemetry = localSession.rawTurnsData;
-                  const statsPayload = {
-                    ...(ss.stats || {}),
-                    rawTurnsData: telemetry
-                  };
+              sessions: deduplicateSessions(
+                sp.sessions.map(ss => {
+                  if (ss.rawTurnsData && ss.rawTurnsData.length > 0) return ss;
                   
-                  // Auto-sincronización silenciosa y transparente en Supabase
-                  supabase.from('sesiones_clinicas')
-                    .update({ estadisticas_json: statsPayload })
-                    .eq('id', ss.sessionId)
-                    .then(({ error }) => {
-                      if (!error) console.log(`[Auto-Sync] Subida telemetría histórica de sesión ${ss.sessionId} a Supabase.`);
-                    });
+                  // Si la sesión de Supabase no tiene telemetría, la buscamos en el localStorage local por coincidencia de fecha o intento
+                  const localSession = lp.sessions?.find(ls => 
+                    ls.testType === ss.testType && 
+                    (ls.attemptNumber === ss.attemptNumber || Math.abs(new Date(ls.date) - new Date(ss.date)) < 30000)
+                  );
 
-                  // Insertar en tablas relacionales para completitud
-                  if (ss.testType === 'reaction') {
-                    const rows = telemetry.map(t => ({
-                      id_sesion: ss.sessionId,
-                      nivel: t.round || t.level || 0,
-                      tiempo_reaccion_ms: t.time !== undefined ? t.time : (t.latencyMs !== undefined ? t.latencyMs : null),
-                      cara_esperada: t.expected || t.expectedFace,
-                      cara_girada: t.actualFace || t.userFace || null,
-                      es_correcto: t.status === 'Ok' || t.status === 'Corregido' || t.isCorrect || false,
-                      timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
-                    }));
-                    supabase.from('resultados_juego_reaccion').insert(rows).then(() => {});
-                  } else if (ss.testType === 'memory') {
-                    const rows = telemetry.map(t => ({
-                      id_sesion: ss.sessionId,
-                      nivel: t.level || 0,
-                      intento: t.trial || 'A',
-                      cara_esperada: t.expectedFace || t.expected || null,
-                      cara_girada: t.userFace || t.actualFace || null,
-                      es_correcto: t.isCorrect !== undefined ? t.isCorrect : (t.status === 'Ok' || t.status === 'Corregido'),
-                      latencia_ms: t.latencyMs !== undefined ? t.latencyMs : (t.time || null),
-                      array_latencias_intra: t.moveLatencies || null,
-                      tipo_error: t.errorType || null,
-                      timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
-                    }));
-                    supabase.from('resultados_juego_memoria').insert(rows).then(() => {});
+                  if (localSession && localSession.rawTurnsData && localSession.rawTurnsData.length > 0) {
+                    console.log(`[Auto-Merge] Inyectada telemetría local de ayer para la sesión ${ss.sessionId} de ${sp.name}`);
+                    const telemetry = localSession.rawTurnsData;
+                    const statsPayload = {
+                      ...(ss.stats || {}),
+                      rawTurnsData: telemetry
+                    };
+                    
+                    // Auto-sincronización silenciosa y transparente en Supabase
+                    supabase.from('sesiones_clinicas')
+                      .update({ estadisticas_json: statsPayload })
+                      .eq('id', ss.sessionId)
+                      .then(({ error }) => {
+                        if (!error) console.log(`[Auto-Sync] Subida telemetría histórica de sesión ${ss.sessionId} a Supabase.`);
+                      });
+
+                    // Insertar en tablas relacionales para completitud
+                    if (ss.testType === 'reaction') {
+                      const rows = telemetry.map(t => ({
+                        id_sesion: ss.sessionId,
+                        nivel: t.round || t.level || 0,
+                        tiempo_reaccion_ms: t.time !== undefined ? t.time : (t.latencyMs !== undefined ? t.latencyMs : null),
+                        cara_esperada: t.expected || t.expectedFace,
+                        cara_girada: t.actualFace || t.userFace || null,
+                        es_correcto: t.status === 'Ok' || t.status === 'Corregido' || t.isCorrect || false,
+                        timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
+                      }));
+                      supabase.from('resultados_juego_reaccion').insert(rows).then(() => {});
+                    } else if (ss.testType === 'memory') {
+                      const rows = telemetry.map(t => ({
+                        id_sesion: ss.sessionId,
+                        nivel: t.level || 0,
+                        intento: t.trial || 'A',
+                        cara_esperada: t.expectedFace || t.expected || null,
+                        cara_girada: t.userFace || t.actualFace || null,
+                        es_correcto: t.isCorrect !== undefined ? t.isCorrect : (t.status === 'Ok' || t.status === 'Corregido'),
+                        latencia_ms: t.latencyMs !== undefined ? t.latencyMs : (t.time || null),
+                        array_latencias_intra: t.moveLatencies || null,
+                        tipo_error: t.errorType || null,
+                        timestamp_local: new Date(t.timestamp || Date.now()).toISOString()
+                      }));
+                      supabase.from('resultados_juego_memoria').insert(rows).then(() => {});
+                    }
+
+                    return {
+                      ...ss,
+                      rawTurnsData: telemetry
+                    };
                   }
-
-                  return {
-                    ...ss,
-                    rawTurnsData: telemetry
-                  };
-                }
-                return ss;
-              })
+                  return ss;
+                })
+              )
             };
           });
         }
@@ -323,21 +336,30 @@ export function usePatientsDB() {
 
       // Guardar base de datos offline consolidada
       if (typeof window !== 'undefined') {
-        localStorage.setItem('cognimirror_offline_patients', JSON.stringify(mapPatients));
+        const cleanData = mapPatients.map(p => ({
+          ...p,
+          sessions: deduplicateSessions(p.sessions)
+        }));
+        localStorage.setItem('cognimirror_offline_patients', JSON.stringify(cleanData));
       }
 
       setPatients(mapPatients);
     } catch (error) {
-      console.error('Error fetching data from Supabase, loading offline fallback data:', error);
+      console.warn('[Offline Mode] Sin conexión a internet o red inestable. Cargando datos locales desde el almacenamiento offline.');
       // Fallback a localStorage offline
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem('cognimirror_offline_patients');
         if (stored) {
           try {
-            setPatients(JSON.parse(stored));
+            const parsed = JSON.parse(stored);
+            const cleanData = parsed.map(p => ({
+              ...p,
+              sessions: deduplicateSessions(p.sessions)
+            }));
+            setPatients(cleanData);
             return;
           } catch (e) {
-            console.error('Error parsing offline patients:', e);
+            console.error('[Offline Mode] Error parsing offline patients:', e);
           }
         }
       }
@@ -347,6 +369,15 @@ export function usePatientsDB() {
 
   useEffect(() => {
     fetchPatients();
+
+    if (typeof window !== 'undefined') {
+      const handleOnline = () => {
+        console.log('[Network] Conexión a internet restablecida en el lobby. Sincronizando datos offline...');
+        fetchPatients();
+      };
+      window.addEventListener('online', handleOnline);
+      return () => window.removeEventListener('online', handleOnline);
+    }
   }, [fetchPatients]);
 
   const createPatient = useCallback(async (name, idSujeto = null) => {
@@ -518,11 +549,16 @@ export function usePatientsDB() {
       }
 
       setPatients(prev => {
-        const newData = [...prev];
-        const idx = newData.findIndex(p => p.id === patientId);
-        if (idx !== -1) {
-          newData[idx].sessions = [...newData[idx].sessions.filter(s => s.sessionId !== tempSessionId), newSession];
-        }
+        const newData = prev.map(p => {
+          if (p.id === patientId) {
+            const updatedSessions = [...p.sessions.filter(s => s.sessionId !== tempSessionId), newSession];
+            return {
+              ...p,
+              sessions: deduplicateSessions(updatedSessions)
+            };
+          }
+          return p;
+        });
         if (typeof window !== 'undefined') {
           localStorage.setItem('cognimirror_offline_patients', JSON.stringify(newData));
         }
@@ -565,11 +601,16 @@ export function usePatientsDB() {
       };
 
       setPatients(prev => {
-        const newData = [...prev];
-        const idx = newData.findIndex(p => p.id === patientId);
-        if (idx !== -1) {
-          newData[idx].sessions = [...newData[idx].sessions, localSession];
-        }
+        const newData = prev.map(p => {
+          if (p.id === patientId) {
+            const updatedSessions = [...p.sessions, localSession];
+            return {
+              ...p,
+              sessions: deduplicateSessions(updatedSessions)
+            };
+          }
+          return p;
+        });
         if (typeof window !== 'undefined') {
           localStorage.setItem('cognimirror_offline_patients', JSON.stringify(newData));
         }
