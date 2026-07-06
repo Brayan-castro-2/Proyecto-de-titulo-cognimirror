@@ -1,5 +1,6 @@
 import { exec } from 'child_process';
 import { NextResponse } from 'next/server';
+import path from 'path';
 
 export async function POST(request) {
   try {
@@ -12,18 +13,20 @@ export async function POST(request) {
       );
     }
 
-    // Traducir acción a tecla de SendKeys de .NET
+    // Traducir acción a tecla de WScript SendKeys
     const sendKey = action === 'right' ? '{RIGHT}' : '{LEFT}';
 
-    // Comando de PowerShell que carga el ensamblado de System.Windows.Forms y envía la tecla a Windows
-    const powershellCmd = `powershell -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.SendKeys]::SendWait('${sendKey}')"`;
+    // Ruta al script de VBScript en caliente
+    const vbsPath = path.join(process.cwd(), 'scripts', 'press_key.vbs');
 
-    console.log(`[API Keyboard] Ejecutando simulación de tecla global: ${action.toUpperCase()}`);
+    const cmd = `wscript //Nologo "${vbsPath}" "${sendKey}"`;
 
-    // Ejecutar el comando en el sistema operativo Windows de forma asíncrona
-    exec(powershellCmd, (error, stdout, stderr) => {
+    console.log(`[API Keyboard] Ejecutando simulación de tecla instantánea: ${action.toUpperCase()}`);
+
+    // Ejecutar el comando de forma asíncrona de inmediato
+    exec(cmd, (error) => {
       if (error) {
-        console.error('[API Keyboard] Error ejecutando PowerShell:', error.message);
+        console.error('[API Keyboard] Error ejecutando VBScript:', error.message);
       }
     });
 

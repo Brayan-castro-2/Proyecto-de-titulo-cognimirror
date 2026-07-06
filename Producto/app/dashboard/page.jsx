@@ -54,11 +54,10 @@ export default function ClassicDashboard() {
       const isClockwise = !notation.includes("'");
       
       let action = null;
-      // R, U, F horarios avanzan (derecha). L, D, B horarios retroceden (izquierda).
-      if (clean === 'R' || clean === 'U' || clean === 'F') {
-        action = isClockwise ? 'right' : 'left';
-      } else if (clean === 'L' || clean === 'D' || clean === 'B') {
-        action = isClockwise ? 'left' : 'right';
+      if (clean === 'R') {
+        action = 'right'; // Giro R o R' avanza
+      } else if (clean === 'L') {
+        action = 'left';  // Giro L o L' retrocede
       }
       
       if (action) {
