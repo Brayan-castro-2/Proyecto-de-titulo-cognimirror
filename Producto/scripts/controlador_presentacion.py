@@ -9,9 +9,9 @@ try:
     # Desactivar el fail-safe de PyAutoGUI para evitar interrupciones accidentales al mover el mouse a las esquinas
     pyautogui.FAILSAFE = False
 except ImportError:
-    print("\n[ERROR]: Falta instalar la librería 'pyautogui' para controlar el teclado.")
+    print("\n[ERROR]: Falta instalar la libreria 'pyautogui' para controlar el teclado.")
     print("Por favor, ejecuta el siguiente comando en tu consola antes de iniciar el script:")
-    print("👉 pip install pyautogui bleak\n")
+    print("-> pip install pyautogui bleak\n")
     sys.exit(1)
 
 # UUIDs de comunicación estándar para cubos inteligentes (Giiker / compatible)
@@ -56,35 +56,38 @@ def notification_handler(sender, data):
                 break
 
 async def main():
-    print("=== CONTROLADOR DE PRESENTACIÓN GLOBAL CON CUBO DE RUBIK ===")
-    print("Buscando cubo inteligente por Bluetooth...")
+    print("=== CONTROLADOR DE PRESENTACION GLOBAL CON CUBO DE RUBIK ===")
     
-    # 1. Escanear dispositivos Bluetooth
-    devices = await BleakScanner.discover()
     cube_device = None
-    
-    for d in devices:
-        name = d.name or ""
-        # Buscar por nombres comunes de cubos inteligentes
-        if "gi" in name.lower() or "cube" in name.lower() or "rubik" in name.lower():
-            cube_device = d
-            break
+    while not cube_device:
+        print("Buscando cubo inteligente por Bluetooth... (Gira una cara del cubo para despertarlo)")
+        try:
+            devices = await BleakScanner.discover(timeout=3.0)
+            for d in devices:
+                name = d.name or ""
+                # Buscar por nombres comunes de cubos inteligentes
+                if "gi" in name.lower() or "cube" in name.lower() or "rubik" in name.lower():
+                    cube_device = d
+                    break
+        except Exception as e:
+            print(f"[Error de Escaneo]: {e}. Reintentando en 3 segundos...")
+            await asyncio.sleep(3)
+            continue
             
-    if not cube_device:
-        print("❌ No se encontró ningún cubo encendido cerca.")
-        print("Por favor, asegúrate de que el cubo tenga batería y gira una de sus caras para despertarlo.")
-        return
+        if not cube_device:
+            print("[INFO] No se encontro ningun cubo encendido cerca. Reintentando...")
+            await asyncio.sleep(2)
 
-    print(f"✅ Cubo encontrado: {cube_device.name} ({cube_device.address})")
+    print(f"[OK] Cubo encontrado: {cube_device.name} ({cube_device.address})")
     print("Conectando al dispositivo...")
     
     async with BleakClient(cube_device.address) as client:
         if client.is_connected:
-            print("🎉 ¡Conectado al cubo con éxito!")
+            print("[CONECTADO] ¡Conectado al cubo con éxito!")
             print("\nInstrucciones de uso:")
             print("- Gira la cara NARANJA (L o L') para AVANZAR de diapositiva.")
             print("- Gira la cara ROJA (R o R') para RETROCEDER de diapositiva.")
-            print("- Puedes abrir tu PowerPoint, PDF o Google Slides en pantalla completa y controlar todo con tu cubo físico.")
+            print("- Puedes abrir tu PowerPoint, PDF o Google Slides en pantalla completa y controlar todo con tu cubo fisico.")
             print("\nPresiona Ctrl+C en esta terminal para desconectar y salir.")
             
             # 2. Suscribirse a las notificaciones de los giros
@@ -98,4 +101,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nDesconectando cubo y saliendo del script. ¡Mucho éxito en tu defensa!")
+        print("\nDesconectando cubo y saliendo del script. ¡Mucho exito en tu defensa!")
