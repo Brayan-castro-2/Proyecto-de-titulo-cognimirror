@@ -11,6 +11,7 @@ import PasscodeModal from './PasscodeModal';
 import { usePatientsDB } from '../hooks/usePatientsDB';
 import PatientSelector from './PatientSelector';
 import ConfirmModal from './ConfirmModal';
+import { Brain } from 'lucide-react';
 
 function CountdownPhase({ onComplete }) {
   const [count, setCount] = useState(3);
@@ -66,7 +67,7 @@ function StepMenu({ onNext, onHistory, activePatient, setActivePatientId, patien
       </div>
 
       <div className="relative flex flex-col items-center gap-3 sm:gap-4 scale-90 sm:scale-100">
-        <span className="text-6xl sm:text-7xl drop-shadow-[0_0_30px_rgba(168,85,247,0.7)]">🧬</span>
+        <Brain size={64} className="text-purple-400 drop-shadow-[0_0_20px_rgba(168,85,247,0.4)]" />
         <h1 className="text-4xl sm:text-5xl font-black text-white tracking-tight">
           Memory{' '}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400">
@@ -243,7 +244,7 @@ function StepHistory({ onBack, onOpenReport, patients, deletePatient, deleteSess
   );
 }
 
-export default function MemoryGameView({ onExit, subjectId, etiquetaEstudio, isWarmupUrl = false }) {
+export default function MemoryGameView({ onExit, subjectId, etiquetaEstudio, isWarmupUrl = false, isDemoMode = false }) {
   const [step, setStep] = useState('menu');
   const [isWarmupMode, setIsWarmupMode] = useState(false);
   
@@ -263,6 +264,8 @@ export default function MemoryGameView({ onExit, subjectId, etiquetaEstudio, isW
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [sessionMeta, setSessionMeta] = useState(null);
   const [sessionStartTime, setSessionStartTime] = useState(null);
+
+
 
   // Efecto de Auto-onboarding para el Modo Evaluador
   useEffect(() => {
@@ -309,7 +312,12 @@ export default function MemoryGameView({ onExit, subjectId, etiquetaEstudio, isW
   const [onPasscodeSuccess, setOnPasscodeSuccess] = useState(() => () => {});
 
   const triggerSecurity = (action) => {
-    setOnPasscodeSuccess(() => action);
+    setOnPasscodeSuccess(() => () => {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('cognimirror_kiosco_active');
+      }
+      action();
+    });
     setIsPasscodeOpen(true);
   };
 
@@ -317,11 +325,14 @@ export default function MemoryGameView({ onExit, subjectId, etiquetaEstudio, isW
     <div className="relative min-h-screen bg-[#07080f] overflow-hidden font-sans">
       <button
         onClick={() => {
-          if (step === 'view_report') {
-            triggerSecurity(() => setStep('history'));
-          } else {
-            onExit();
-          }
+          triggerSecurity(() => {
+            if (step === 'view_report' || step === 'history') {
+              setStep('menu');
+            } else {
+              localStorage.removeItem('cognimirror_kiosco_active');
+              onExit();
+            }
+          });
         }}
         className="absolute top-5 left-5 z-50 flex items-center gap-2 px-3 py-2 rounded-lg text-white/40 hover:text-white/80 text-sm hover:bg-white/5 transition-all duration-150 no-print cursor-pointer"
       >
@@ -331,6 +342,9 @@ export default function MemoryGameView({ onExit, subjectId, etiquetaEstudio, isW
       {step === 'menu' && (
         <StepMenu 
           onNext={() => {
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('cognimirror_kiosco_active', 'true');
+            }
             setSessionStartTime(Date.now());
             setStep('tutorial');
           }} 
@@ -386,6 +400,7 @@ export default function MemoryGameView({ onExit, subjectId, etiquetaEstudio, isW
           playerName={activePatient?.name || 'Paciente'}
           sessionMeta={sessionMeta}
           sessionStartTime={sessionStartTime}
+          isDemoMode={isDemoMode}
           onExit={async (record) => { 
             if (record) {
               const enrichedRecord = { ...record, playerName: activePatient?.name };
@@ -412,12 +427,16 @@ export default function MemoryGameView({ onExit, subjectId, etiquetaEstudio, isW
               setSelectedRecord(enrichedRecord);
               setStep('view_report');
             } else {
-              if (subjectId) {
-                window.location.href = `/evaluador?subjectId=${subjectId}`;
-              } else {
-                setStep('menu'); 
-              }
-              setSessionMeta(null);
+              // Si aborta el juego a mitad de camino, requerir PIN de supervisor
+              triggerSecurity(() => {
+                localStorage.removeItem('cognimirror_kiosco_active');
+                if (subjectId) {
+                  window.location.href = `/evaluador?subjectId=${subjectId}`;
+                } else {
+                  setStep('menu'); 
+                }
+                setSessionMeta(null);
+              });
             }
           }}
         />

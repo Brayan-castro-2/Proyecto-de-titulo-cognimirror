@@ -234,7 +234,7 @@ export default function OnboardingForm({ onComplete, playerName }) {
 
   // ── Lógica de movimiento del cubo ─────────────────────────────
   const handleCubeMove = useCallback((movimiento) => {
-    if (exiting || entering) return;
+    if (exiting || entering || flash === 'green' || pulse) return;
     
     const now = Date.now();
     moveHistory.current.push({ m: movimiento, t: now });
@@ -295,6 +295,8 @@ export default function OnboardingForm({ onComplete, playerName }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [handleCubeMove]);
+
+  if (!pregunta) return null;
 
   const levelText = pregunta.levels[pregunta.levelFn(values[pregunta.key])];
 

@@ -803,6 +803,11 @@ export default function ReactionDashboard({
                         <span className="bg-slate-100 text-slate-700 rounded px-2 py-0.5 font-semibold">
                           Estímulo: {faceName(t.expected || t.expectedFace)}
                         </span>
+                        {t.actualFace && (
+                          <span className={`rounded px-2 py-0.5 font-semibold ${t.status === 'Ok' || t.status === 'Corregido' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
+                            Girado: {faceName(t.actualFace)}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <p className="text-sm text-slate-700">{statusText}</p>

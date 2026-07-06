@@ -295,8 +295,8 @@ function RemoteEvalContent() {
 
       {/* STEP 1: WELCOME SCREEN */}
       {step === 'welcome' && (
-        <div className="my-auto mx-auto w-full max-w-xl p-8 relative z-10">
-          <div className="bg-[#13161e] border border-white/5 p-8 rounded-3xl shadow-2xl flex flex-col items-center text-center">
+        <div className="my-auto mx-auto w-full max-w-xl p-4 sm:p-8 relative z-10">
+          <div className="bg-[#13161e] border border-white/5 p-5 sm:p-8 rounded-3xl shadow-2xl flex flex-col items-center text-center">
             
             {/* Tag */}
             <span className="px-3 py-1 bg-cyan-950/40 text-cyan-400 border border-cyan-800/30 rounded-full text-[10px] font-black uppercase tracking-widest mb-6">
@@ -311,7 +311,7 @@ function RemoteEvalContent() {
             </p>
 
             {/* Test Card */}
-            <div className="w-full bg-black/40 border border-white/5 p-6 rounded-2xl text-left mb-8 flex gap-4 items-start">
+            <div className="w-full bg-black/40 border border-white/5 p-4 sm:p-6 rounded-2xl text-left mb-8 flex flex-col sm:flex-row gap-4 items-center sm:items-start text-center sm:text-left">
               <div className="w-12 h-12 bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center rounded-xl text-cyan-400 flex-shrink-0">
                 {currentTestType === 'reaction' ? <Zap size={24} /> : <Activity size={24} />}
               </div>
@@ -354,8 +354,8 @@ function RemoteEvalContent() {
 
       {/* STEP 2: RULES / INSTRUCTIONS */}
       {step === 'instructions' && (
-        <div className="my-auto mx-auto w-full max-w-xl p-8 relative z-10">
-          <div className="bg-[#13161e] border border-white/5 p-8 rounded-3xl shadow-2xl flex flex-col items-center text-center">
+        <div className="my-auto mx-auto w-full max-w-xl p-4 sm:p-8 relative z-10">
+          <div className="bg-[#13161e] border border-white/5 p-5 sm:p-8 rounded-3xl shadow-2xl flex flex-col items-center text-center">
             <h2 className="text-2xl font-black text-white tracking-tight uppercase mb-6">Reglas Generales</h2>
             
             <div className="w-full flex flex-col gap-4 text-left text-sm text-slate-400 leading-relaxed mb-8">
@@ -465,8 +465,8 @@ function RemoteEvalContent() {
 
       {/* STEP 4: COMPLETED SCREEN */}
       {step === 'completed' && (
-        <div className="my-auto mx-auto w-full max-w-md p-8 relative z-10 animate-fade-in">
-          <div className="bg-[#13161e] border border-white/5 p-8 rounded-3xl text-center shadow-2xl relative overflow-hidden">
+        <div className="my-auto mx-auto w-full max-w-md p-4 sm:p-8 relative z-10 animate-fade-in">
+          <div className="bg-[#13161e] border border-white/5 p-5 sm:p-8 rounded-3xl text-center shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-[2px] bg-green-500" />
             <ShieldCheck className="mx-auto text-green-400 mb-6" size={54} />
             <h2 className="text-2xl font-black text-white tracking-tight uppercase mb-4">Evaluación Enviada</h2>

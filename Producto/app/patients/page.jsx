@@ -18,7 +18,8 @@ export default function PatientDirectory() {
 
   const filteredPatients = patients.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (p.idSujeto && p.idSujeto.toLowerCase().includes(searchTerm.toLowerCase()))
+    (p.idSujeto && p.idSujeto.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    p.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleAddPatient = async (e) => {

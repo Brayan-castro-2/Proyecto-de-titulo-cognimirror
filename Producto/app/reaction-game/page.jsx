@@ -8,15 +8,39 @@ function GameContent() {
   const searchParams = useSearchParams();
   const subjectId = searchParams.get('subjectId');
   const etiquetaEstudio = searchParams.get('etiquetaEstudio');
-  const warmup = searchParams.get('warmup') === 'true';
+  const modo = searchParams.get('modo');
+  
+  const isDemo = modo === 'defensa';
+  const warmup = isDemo || searchParams.get('warmup') === 'true';
+
+  const handleExit = () => {
+    if (isDemo) {
+      router.push('/defensa?slide=13'); // Diapositiva 14
+    } else {
+      router.push('/dashboard');
+    }
+  };
 
   return (
-    <ReactionGameView 
-      onExit={() => router.push('/dashboard')} 
-      subjectId={subjectId}
-      etiquetaEstudio={etiquetaEstudio}
-      isWarmupUrl={warmup}
-    />
+    <div className="relative">
+      {/* Botón flotante para retorno inmersivo a la presentación */}
+      {isDemo && (
+        <button 
+          onClick={handleExit}
+          className="fixed top-5 left-5 z-[9999] px-4 py-2.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-all cursor-pointer shadow-lg shadow-purple-500/20 border border-purple-500/30 flex items-center gap-1.5"
+        >
+          <span>◀</span> Volver a la Defensa
+        </button>
+      )}
+
+      <ReactionGameView 
+        onExit={handleExit} 
+        subjectId={subjectId}
+        etiquetaEstudio={etiquetaEstudio}
+        isWarmupUrl={warmup}
+        isDemoMode={isDemo}
+      />
+    </div>
   );
 }
 

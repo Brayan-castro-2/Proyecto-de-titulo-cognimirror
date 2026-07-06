@@ -148,7 +148,7 @@ export async function exportReactionMirrorExcel({ playerName, date, metrics, pos
     const isNew = t.type !== undefined;
     const type = isNew ? t.type : (t.isOmission ? 'NOGO' : 'GO');
     const expected = isNew ? faceLabel(t.expected) : faceLabel(t.expectedFace);
-    const actual = isNew ? faceLabel(t.expected) : faceLabel(t.actualFace);
+    const actual = faceLabel(t.actualFace || (t.status === 'Ok' || t.status === 'Corregido' || t.isCorrect ? (t.expected || t.expectedFace) : null));
     const rt = isNew ? (t.time || '—') : (t.reactionTimeMs || '—');
     const correct = isNew ? (t.status === 'Ok' || t.status === 'Corregido') : t.isCorrect;
     const status = isNew ? (t.status || '') : (t.isFalseStart ? 'Falso Arranque' : t.isOmission ? 'Omisión' : t.firstMoveWrong ? 'Corregido' : 'Ok');
@@ -289,7 +289,7 @@ export async function exportAllReactionHistoryExcel(historyList) {
       const isNew = t.type !== undefined;
       const type = isNew ? t.type : (t.isOmission ? 'NOGO' : 'GO');
       const expected = isNew ? faceLabel(t.expected) : faceLabel(t.expectedFace);
-      const actual = isNew ? faceLabel(t.expected) : faceLabel(t.actualFace);
+      const actual = faceLabel(t.actualFace || (t.status === 'Ok' || t.status === 'Corregido' || t.isCorrect ? (t.expected || t.expectedFace) : null));
       const rt = isNew ? (t.time || '—') : (t.reactionTimeMs || '—');
       const correct = isNew ? (t.status === 'Ok' || t.status === 'Corregido') : t.isCorrect;
       const status = isNew ? (t.status || '') : (t.isFalseStart ? 'Falso Arranque' : t.isOmission ? 'Omisión' : t.firstMoveWrong ? 'Corregido' : 'Ok');

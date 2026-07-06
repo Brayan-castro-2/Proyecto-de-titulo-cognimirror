@@ -75,7 +75,7 @@ function generateDeck() {
   });
 }
 
-export default function ReactionGame({ onExit, activePatientId, addSession, getPatient, sessionMeta, sessionStartTime, isWarmup = false, etiquetaEstudio = null, idSujeto = null, onTelemetryUpdate }) {
+export default function ReactionGame({ onExit, activePatientId, addSession, getPatient, sessionMeta, sessionStartTime, isWarmup = false, isDemoMode = false, etiquetaEstudio = null, idSujeto = null, onTelemetryUpdate }) {
   const { subscribeToMoves, isConnected, openScanner } = useBluetoothCube();
   const { cubeRotation: globalRotation } = useCubeState();
   const { deactivate: deactivateJoicube } = useJoicube();
@@ -86,6 +86,25 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
   // --- WARMUP TIMER ---
   const [warmupTimeLeft, setWarmupTimeLeft] = useState(15);
   const [warmupFinished, setWarmupFinished] = useState(false);
+  const [cubeSize, setCubeSize] = useState(300);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const handleResize = () => {
+        const width = window.innerWidth;
+        if (width < 640) {
+          setCubeSize(240); // Móvil
+        } else if (width < 1024) {
+          setCubeSize(280); // Tablet
+        } else {
+          setCubeSize(350); // Desktop
+        }
+      };
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isWarmup) return;
@@ -108,8 +127,14 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mazo estático y generado para las 15 rondas
-  const deck = useMemo(() => generateDeck(), []);
+  // Mazo estático y generado para las 15 rondas (cortado a 5 en demo/ensayo)
+  const deck = useMemo(() => {
+    const fullDeck = generateDeck();
+    if (isWarmup || isDemoMode) {
+      return fullDeck.slice(0, 5);
+    }
+    return fullDeck;
+  }, [isWarmup, isDemoMode]);
 
   const [stage, setStage] = useState('waiting'); // waiting | stimulus | finished
   const [round, setRound] = useState(0); 
@@ -176,6 +201,8 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
               round: round + 1, 
               type: 'NOGO', 
               label: target.label, // Nombre del color distractor
+              expected: 'NOGO',
+              actualFace: null,
               fail: false, 
               time: null,
               status: 'Ok'
@@ -213,7 +240,7 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
                  copy[existsIdx].status = 'Omisión / Lento';
                  return copy;
                }
-               return [...prev, { round: round + 1, type: 'GO', expected: target.id, time: null, errors: 0, timeout: true, status: 'Omisión / Lento' }];
+               return [...prev, { round: round + 1, type: 'GO', expected: target.id, actualFace: null, time: null, errors: 0, timeout: true, status: 'Omisión / Lento' }];
             });
 
             setStage('waiting');
@@ -318,6 +345,8 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
         round: round + 1, 
         type: 'NOGO', 
         label: target.label, 
+        expected: 'NOGO',
+        actualFace: currentMove,
         fail: true, 
         time: Math.round(rt), // Velocidad de Impulso (Clínico)
         status: 'Fallo de Inhibición'
@@ -356,6 +385,7 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
             round: round + 1, 
             type: 'GO', 
             expected: target.id, 
+            actualFace: target.id,
             time: Math.round(rt), 
             errors: hasError ? 1 : 0, 
             status: hasError ? 'Corregido' : 'Ok' 
@@ -375,6 +405,7 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
           round: round + 1, 
           type: 'GO', 
           expected: target.id, 
+          actualFace: currentMove,
           time: Math.round(rt), 
           errors: 1, 
           status: 'Error de Lado' 
@@ -518,14 +549,14 @@ export default function ReactionGame({ onExit, activePatientId, addSession, getP
                 boxShadow: stage === 'stimulus' ? `0 0 120px ${activeColor}` : 'none'
               }}
             >
-              <Cube3DViewer size={300} status="gyro_active" targetRotation={globalRotation} />
+              <Cube3DViewer size={cubeSize} status="gyro_active" targetRotation={globalRotation} />
               
               {/* FEEDBACK ON-FIRE */}
               <AnimatePresence>
                 {currentStreak > 0 && (
                   <motion.div 
                     initial={{ opacity:0, x: 20 }} animate={{ opacity:1, x: 0 }} exit={{ opacity:0, scale:0.5 }}
-                    className="absolute -right-12 top-1/2 -translate-y-1/2 flex flex-col items-center pointer-events-none"
+                    className="absolute right-2 sm:-right-12 top-1/2 -translate-y-1/2 flex flex-col items-center pointer-events-none z-20"
                   >
                     <div 
                       className="relative"
