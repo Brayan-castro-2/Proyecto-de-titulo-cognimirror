@@ -44,13 +44,13 @@ def notification_handler(sender, data):
                 print(f"[Cubo Detectado] Giro: {move_name}")
                 
                 # --- CONTROL DE LA PRESENTACIÓN ---
-                # Giros horarios (avanzar): R, U, F
-                if move_name in ["R", "U", "F"]:
+                # Giros en cara Naranja (L o L'): Avanzar
+                if move_name in ["L", "L'"]:
                     print("➡️ Simulando tecla: FLECHA DERECHA (Avanzar diapositiva)")
                     pyautogui.press('right')
                     
-                # Giros antihorarios (retroceder): R', U', F'
-                elif move_name in ["R'", "U'", "F'"]:
+                # Giros en cara Roja (R o R'): Retroceder
+                elif move_name in ["R", "R'"]:
                     print("⬅️ Simulando tecla: FLECHA IZQUIERDA (Retroceder diapositiva)")
                     pyautogui.press('left')
                 break
@@ -82,8 +82,8 @@ async def main():
         if client.is_connected:
             print("🎉 ¡Conectado al cubo con éxito!")
             print("\nInstrucciones de uso:")
-            print("- Gira cualquier cara del lado derecho (R), arriba (U) o al frente (F) en sentido horario para AVANZAR.")
-            print("- Gira en sentido antihorario (R', U', F') para RETROCEDER.")
+            print("- Gira la cara NARANJA (L o L') para AVANZAR de diapositiva.")
+            print("- Gira la cara ROJA (R o R') para RETROCEDER de diapositiva.")
             print("- Puedes abrir tu PowerPoint, PDF o Google Slides en pantalla completa y controlar todo con tu cubo físico.")
             print("\nPresiona Ctrl+C en esta terminal para desconectar y salir.")
             
