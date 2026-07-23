@@ -13,18 +13,21 @@ export async function POST(request) {
       );
     }
 
-    // Ruta absoluta del script de PowerShell
-    const scriptPath = path.join(process.cwd(), 'scripts', 'press_key.ps1');
+    // Traducir acción a tecla de WScript SendKeys
+    const sendKey = action === 'right' ? '{RIGHT}' : '{LEFT}';
 
-    // Ejecutar PowerShell con política de bypass y pasar la acción como parámetro
-    const cmd = `powershell -ExecutionPolicy Bypass -File "${scriptPath}" "${action}"`;
+    // Ruta absoluta del script de VBScript
+    const vbsPath = path.join(process.cwd(), 'scripts', 'press_key.vbs');
 
-    console.log(`[API Keyboard] Inyectando tecla física global de Windows: ${action.toUpperCase()}`);
+    // Ejecutar cscript (consola nativa) de forma asíncrona e instantánea (<10ms)
+    const cmd = `cscript //Nologo "${vbsPath}" "${sendKey}"`;
+
+    console.log(`[API Keyboard] Inyectando tecla física global de Windows por cscript: ${action.toUpperCase()}`);
 
     // Ejecutar el comando de forma asíncrona de inmediato
     exec(cmd, (error) => {
       if (error) {
-        console.error('[API Keyboard] Error ejecutando inyección de hardware:', error.message);
+        console.error('[API Keyboard] Error ejecutando inyección por cscript:', error.message);
       }
     });
 

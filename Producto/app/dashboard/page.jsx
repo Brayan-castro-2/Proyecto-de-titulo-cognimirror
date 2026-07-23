@@ -54,10 +54,10 @@ export default function ClassicDashboard() {
       const isClockwise = !notation.includes("'");
       
       let action = null;
-      if (clean === 'R') {
-        action = 'right'; // Giro R o R' avanza
-      } else if (clean === 'L') {
-        action = 'left';  // Giro L o L' retrocede
+      if (clean === 'L') {
+        action = 'right'; // Giro L o L' (Naranja) avanza
+      } else if (clean === 'R') {
+        action = 'left';  // Giro R o R' (Rojo) retrocede
       }
       
       if (action) {

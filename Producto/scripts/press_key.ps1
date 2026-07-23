@@ -7,9 +7,11 @@ $type = Add-Type -MemberDefinition $signature -Name "Keyboard" -Namespace "Win32
 if ($key -eq "right") {
     # Virtual-Key 0x27 = Flecha Derecha (ArrowRight)
     $type::keybd_event(0x27, 0, 0, 0) # Key Down
+    Start-Sleep -Milliseconds 15
     $type::keybd_event(0x27, 0, 2, 0) # Key Up
 } elseif ($key -eq "left") {
     # Virtual-Key 0x25 = Flecha Izquierda (ArrowLeft)
     $type::keybd_event(0x25, 0, 0, 0) # Key Down
+    Start-Sleep -Milliseconds 15
     $type::keybd_event(0x25, 0, 2, 0) # Key Up
 }

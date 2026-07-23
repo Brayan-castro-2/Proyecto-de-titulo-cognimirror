@@ -1,0 +1,10 @@
+Grupo_1
+Integrantes:
+1. Brayan Castro
+2. [Nombre del Integrante 2]
+3. [Nombre del Integrante 3]
+
+Curso: Taller Aplicado de Programación (TPY1101)
+Sección: [Sección, ej. 001D]
+Proyecto: CogniMirror — Plataforma Neuropsicológica IoT
+Fecha de Entrega: Junio 2026

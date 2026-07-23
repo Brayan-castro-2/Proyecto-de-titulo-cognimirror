@@ -1,0 +1,6 @@
+- `[ ]` Crear el microservicio backend de análisis clínico `/api/calcular-fatiga` (POST)
+- `[ ]` Crear el microservicio backend transaccional de informes `/api/generar-informe` (GET)
+- `[ ]` Integrar los comentarios por ronda (bitácora detallada) en `ReactionDashboard.jsx` y `MemoryDashboard.jsx` con persistencia en Supabase JSONB
+- `[ ]` Implementar el canal de comunicación en tiempo real (Supabase Realtime) en `/export` (Sala de Control Remoto con Gemelo Digital 3D en vivo)
+- `[ ]` Implementar el cliente en tiempo real en `/remote-eval` (respuesta a comandos y transmisión de telemetría + giroscopio)
+- `[ ]` Validar que el build de producción se complete sin errores
